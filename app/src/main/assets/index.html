@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0b0e">
+<meta name="color-scheme" content="dark">
+<title>Будильник</title>
+<style>
+  :root {
+    --bg: #0b0b0e;
+    --surface: #16161b;
+    --surface-2: #1d1d24;
+    --line: rgba(255, 255, 255, .07);
+    --text: #f4f3ef;
+    --muted: #8b8b96;
+    --dim: #5a5a64;
+    --accent: #d8ff63;
+    --danger: #ff7b72;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    background:
+      radial-gradient(120% 80% at 50% -10%, #1c1d24 0%, #0b0b0e 55%, #08080a 100%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", sans-serif;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ————— Каркас: три равные трети ————— */
+  .app {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-width: 640px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-rows: 1fr 1fr 1fr;
+    padding:
+      env(safe-area-inset-top, 0px)
+      0
+      env(safe-area-inset-bottom, 0px);
+  }
+
+  /* ————— Верхняя треть: цифры ————— */
+  .display {
+    min-height: 0;
+    padding: 18px 24px 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .statusline {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #3b3b44;
+    flex: 0 0 auto;
+    transition: background .25s, box-shadow .25s;
+  }
+
+  .app.active .dot {
+    background: var(--accent);
+    box-shadow: 0 0 12px rgba(216, 255, 99, .65);
+  }
+
+  #statusText {
+    font-size: 12.5px;
+    letter-spacing: .02em;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color .25s;
+  }
+
+  .app.active #statusText { color: #cfcfc4; }
+
+  .power {
+    margin-left: 0;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, .08);
+    background: rgba(255, 255, 255, .035);
+    color: var(--dim);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: color .2s, background .2s, border-color .2s;
+  }
+
+  .power svg { width: 17px; height: 17px; }
+  .power.on {
+    color: #0b0b0d;
+    background: var(--accent);
+    border-color: transparent;
+  }
+  .power:active { transform: scale(.94); }
+
+  .timeblock {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding-bottom: 16px;
+  }
+
+  .time {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 88px;
+    font-size: clamp(64px, 23vw, 118px);
+    font-weight: 300;
+    line-height: .96;
+    letter-spacing: -.055em;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    cursor: pointer;
+    transition: color .25s, opacity .25s;
+  }
+
+  .app:not(.active) .time { color: #4c4c55; }
+  .time:active { opacity: .72; }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    font-size: 12.5px;
+    color: var(--muted);
+    letter-spacing: .01em;
+  }
+
+  .meta .mid { width: 3px; height: 3px; border-radius: 50%; background: #3f3f48; flex: 0 0 auto; }
+  .meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ————— Средняя треть: настройки ————— */
+  .settings {
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+  }
+
+  .card {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 26px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .025));
+    overflow: hidden;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .row {
+    width: 100%;
+    min-height: clamp(54px, 8.4vh, 72px);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 18px;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .row:active { background: rgba(255, 255, 255, .035); }
+  .row.static { cursor: default; }
+  .row.static:active { background: none; }
+
+  .icon {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    color: #cfcfc4;
+    background: rgba(255, 255, 255, .06);
+  }
+
+  .icon svg { width: 19px; height: 19px; }
+
+  .labels {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .label {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .value {
+    font-size: 15px;
+    letter-spacing: -.005em;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .chev { flex: 0 0 auto; color: var(--dim); display: grid; place-items: center; }
+  .chev svg { width: 17px; height: 17px; }
+
+  .sep { height: 1px; margin: 0 18px; background: var(--line); }
+
+  .switch {
+    position: relative;
+    width: 50px;
+    height: 30px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, .06);
+    border-radius: 999px;
+    background: #2b2b34;
+    cursor: pointer;
+    transition: background .22s, border-color .22s;
+  }
+
+  .switch span {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #8b8b96;
+    transition: left .22s cubic-bezier(.2, .8, .2, 1), background .22s;
+  }
+
+  .switch[aria-checked="true"] {
+    background: var(--accent);
+    border-color: transparent;
+  }
+
+  .switch[aria-checked="true"] span {
+    left: 23px;
+    background: #0b0b0d;
+  }
+
+  /* ————— Нижняя треть: две кнопки ————— */
+  .actions {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 6px 20px 20px;
+  }
+
+  .action {
+    min-width: 0;
+    min-height: 0;
+    padding: 18px 12px;
+    border-radius: 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    font: inherit;
+    cursor: pointer;
+    transition: transform .12s ease, filter .2s, opacity .2s;
+  }
+
+  .action:active { transform: scale(.972); }
+
+  .act-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    margin-bottom: 2px;
+  }
+
+  .act-icon svg { width: 21px; height: 21px; }
+
+  .action-title {
+    font-size: 21px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    line-height: 1.1;
+  }
+
+  .action-sub {
+    font-size: 11.5px;
+    line-height: 1.3;
+    letter-spacing: .01em;
+    opacity: .62;
+    text-align: center;
+    max-width: 150px;
+  }
+
+  .snooze {
+    border: 0;
+    background: var(--accent);
+    color: #0b0b0d;
+    box-shadow: 0 18px 44px -22px rgba(216, 255, 99, .55);
+  }
+
+  .snooze .act-icon { background: rgba(11, 11, 14, .1); }
+
+  .disable {
+    border: 1px solid rgba(255, 123, 114, .16);
+    background: linear-gradient(180deg, #1c1c23, #141419);
+    color: var(--danger);
+  }
+
+  .disable .act-icon { background: rgba(255, 123, 114, .09); }
+
+  /* ————— Модальные панели ————— */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(4, 4, 6, .62);
+    -webkit-backdrop-filter: blur(7px);
+    backdrop-filter: blur(7px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease;
+  }
+
+  .overlay.open { opacity: 1; pointer-events: auto; }
+
+  .sheet {
+    width: 100%;
+    max-width: 640px;
+    max-height: 84vh;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 30px 30px 0 0;
+    background: #15151a;
+    box-shadow: 0 -30px 80px rgba(0, 0, 0, .55);
+    transform: translateY(26px);
+    transition: transform .26s cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .overlay.open .sheet { transform: none; }
+
+  .grabber {
+    width: 38px;
+    height: 4px;
+    margin: 2px auto 14px;
+    border-radius: 4px;
+    background: #34343e;
+    flex: 0 0 auto;
+  }
+
+  .sheet-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+  }
+
+  .sheet-head h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -.015em;
+  }
+
+  .close {
+    margin-left: auto;
+    width: 36px;
+    height: 36px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .06);
+    color: var(--muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+
+  .close svg { width: 16px; height: 16px; }
+
+  .hint {
+    margin: 0 0 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--muted);
+    flex: 0 0 auto;
+  }
+
+  .sound-list {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -8px;
+    padding: 0 8px;
+  }
+
+  .sound {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 4px;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .05);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .sound:last-child { border-bottom: 0; }
+
+  .sound-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 14.5px;
+    color: #deded6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .radio {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    border: 1.5px solid #4b4b55;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    transition: background .15s, border-color .15s;
+  }
+
+  .sound.selected .radio {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+
+  .sound.selected .radio::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0b0b0d;
+  }
+
+  .play {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, .06);
+    color: #d8d8cf;
+    cursor: pointer;
+  }
+
+  .play svg { width: 15px; height: 15px; }
+  .play:active { background: rgba(255, 255, 255, .13); }
+
+  .time-input {
+    width: 100%;
+    margin: 4px 0 0;
+    padding: 18px 0 22px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    font-size: 72px;
+    font-size: clamp(58px, 19vw, 88px);
+    font-weight: 300;
+    letter-spacing: -.05em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    outline: none;
+  }
+
+  .time-input::-webkit-calendar-picker-indicator {
+    opacity: .4;
+    cursor: pointer;
+    margin-left: 6px;
+  }
+
+  .time-input::-webkit-datetime-edit { padding: 0; }
+
+  .sheet-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex: 0 0 auto;
+  }
+
+  .btn {
+    flex: 1;
+    height: 52px;
+    border: 0;
+    border-radius: 17px;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -.005em;
+    cursor: pointer;
+  }
+
+  .btn:active { transform: scale(.985); }
+  .btn-ghost { background: #26262e; color: var(--text); }
+  .btn-primary { background: var(--accent); color: #0b0b0d; }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(33.333% + 14px);
+    z-index: 40;
+    max-width: calc(100vw - 48px);
+    padding: 11px 18px;
+    border-radius: 999px;
+    background: #f4f3ef;
+    color: #0b0b0d;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .45);
+    opacity: 0;
+    transform: translate(-50%, 8px);
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+  }
+
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-height: 640px) {
+    .display { padding-top: 10px; }
+    .timeblock { padding-bottom: 8px; }
+    .row { min-height: 66px; padding-top: 10px; padding-bottom: 10px; }
+    .action-title { font-size: 19px; }
+    .act-icon { width: 38px; height: 38px; }
+  }
+
+  @media (min-width: 560px) {
+    .display { padding-left: 40px; padding-right: 40px; }
+    .settings, .actions { padding-left: 40px; padding-right: 40px; }
+  }
+
+  /* ————— Шестерёнка и дни недели ————— */
+  .gear { margin-left: auto; margin-right: 8px; }
+  .power.gear svg { width: 18px; height: 18px; }
+
+  .daysrow {
+    display: flex;
+    gap: 6px;
+    padding: 4px 14px clamp(10px, 1.8vh, 16px);
+    transition: opacity .2s;
+  }
+  .card.norepeat .daysrow { opacity: .3; pointer-events: none; }
+
+  .day {
+    flex: 1;
+    min-width: 0;
+    height: clamp(32px, 4.6vh, 40px);
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, .07);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .035);
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .day.on { background: var(--accent); color: #0b0b0d; border-color: transparent; }
+  .day.weekend:not(.on) { color: #b9877f; }
+
+  /* ————— Шторка настроек ————— */
+  .sheet.tall { height: 88vh; max-height: 88vh; }
+  .sheet-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -8px;
+    padding: 0 8px 8px;
+  }
+  .group-title {
+    margin: 18px 0 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .group-title:first-child { margin-top: 4px; }
+  .set {
+    padding: 13px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .05);
+  }
+  .set:last-child { border-bottom: 0; }
+  .set-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .set-head.nomargin { margin-bottom: 0; }
+  .set-title { font-size: 14.5px; color: #e6e6de; }
+  .set-hint { margin-top: 3px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+  .set-value { margin-left: auto; font-size: 13px; color: var(--accent); white-space: nowrap; }
+  .set .switch { margin-left: auto; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .chip {
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .04);
+    color: #c9c9c0;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .chip.on { background: var(--accent); color: #0b0b0d; border-color: transparent; font-weight: 600; }
+
+  .text-input {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    border: 1px solid rgba(255, 255, 255, .09);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .04);
+    color: var(--text);
+    font: inherit;
+    font-size: 15px;
+    outline: none;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .text-input:focus { border-color: rgba(216, 255, 99, .55); }
+  .text-input::placeholder { color: var(--dim); }
+
+  input[type="range"] {
+    width: 100%;
+    margin: 4px 0 0;
+    accent-color: var(--accent);
+    height: 28px;
+  }
+
+  .btn-row { display: flex; gap: 10px; }
+  .btn-sm {
+    flex: 1;
+    min-height: 46px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .05);
+    color: var(--text);
+    font: inherit;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .btn-sm:active { background: rgba(255, 255, 255, .1); }
+  .btn-sm[disabled] { opacity: .35; pointer-events: none; }
+  .btn-sm.accent { background: var(--accent); color: #0b0b0d; border-color: transparent; font-weight: 600; }
+
+  .health { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+  .health + .health { border-top: 1px solid rgba(255, 255, 255, .05); }
+  .hdot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
+  .hdot.bad { background: var(--danger); }
+  .htext { flex: 1; min-width: 0; font-size: 13.5px; color: #dcdcd4; }
+  .htext small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
+  .health .btn-sm { flex: 0 0 auto; min-height: 36px; padding: 4px 14px; }
+
+  .add-file {
+    width: 100%;
+    margin-top: 10px;
+    flex: 0 0 auto;
+  }
+  .sound .del {
+    width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%;
+    display: grid; place-items: center; color: var(--dim); font-size: 18px; line-height: 1;
+  }
+
+  .chips + .set-hint, .btn-row + .set-hint, input[type="range"] + .set-hint { margin-top: 10px; }
+  .toast.top { bottom: auto; top: calc(14px + env(safe-area-inset-top, 0px)); }
+
+  /* ————— Выбор способа отключения ————— */
+  .choice {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 10px;
+    padding: 15px 18px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 17px;
+    background: rgba(255, 255, 255, .04);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .choice:active { background: rgba(255, 255, 255, .09); }
+  .choice-title { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+  .choice-sub { font-size: 12.5px; line-height: 1.35; color: var(--muted); }
+
+  /* ————— Светлая тема ————— */
+  body.light {
+    --surface: #ffffff;
+    --surface-2: #e9eae3;
+    --line: rgba(20, 24, 12, .1);
+    --text: #1c1d22;
+    --muted: #5f6068;
+    --dim: #9b9ca4;
+    --danger: #c94b42;
+    color-scheme: light;
+    background: linear-gradient(180deg, #fafaf7 0%, #efefeb 60%, #e7e7e3 100%);
+  }
+
+  body.light .dot { background: #c2c2c8; }
+  body.light .app.active .dot { box-shadow: 0 0 12px rgba(178, 216, 56, .55); }
+  body.light .app.active #statusText { color: #43443a; }
+  body.light .power { border-color: rgba(20, 24, 12, .14); background: rgba(20, 24, 12, .04); color: #8b8c94; }
+  body.light .power.on { color: #17181c; }
+  body.light .app:not(.active) .time { color: #b6b6bd; }
+  body.light .meta .mid { background: #a9aab1; }
+  body.light .card { background: #ffffff; border-color: rgba(20, 24, 12, .09); }
+  body.light .row:active { background: rgba(20, 24, 12, .05); }
+  body.light .icon { color: #43443a; background: rgba(20, 24, 12, .05); }
+  body.light .switch { background: #d9d9de; border-color: rgba(20, 24, 12, .1); }
+  body.light .switch span { background: #ffffff; }
+  body.light .snooze { color: #17181c; box-shadow: 0 18px 44px -22px rgba(150, 190, 40, .5); }
+  body.light .snooze .act-icon { background: rgba(23, 24, 28, .12); }
+  body.light .disable { background: #fdfdfb; border-color: rgba(201, 75, 66, .4); color: var(--danger); }
+  body.light .disable .act-icon { background: rgba(201, 75, 66, .09); }
+  body.light .overlay { background: rgba(235, 235, 231, .62); }
+  body.light .sheet { background: #f7f7f3; box-shadow: 0 -30px 80px rgba(30, 30, 20, .22); }
+  body.light .grabber { background: #c8c8cf; }
+  body.light .close { background: rgba(20, 24, 12, .06); color: #5b5c64; }
+  body.light .sound { border-bottom-color: rgba(20, 24, 12, .07); }
+  body.light .sound-title { color: var(--text); }
+  body.light .radio { border-color: #9b9ca4; }
+  body.light .play { background: rgba(20, 24, 12, .05); color: #43443a; }
+  body.light .play:active { background: rgba(20, 24, 12, .12); }
+  body.light .btn-ghost { background: #e6e6e1; color: var(--text); }
+  body.light .toast { background: #1c1d22; color: #f4f3ef; box-shadow: 0 14px 40px rgba(30, 30, 20, .3); }
+  body.light .day { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: #5f6068; }
+  body.light .day.on { color: #17181c; }
+  body.light .day.weekend:not(.on) { color: #a34f46; }
+  body.light .set { border-bottom-color: rgba(20, 24, 12, .07); }
+  body.light .set-title { color: var(--text); }
+  body.light .chip { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: #43443a; }
+  body.light .chip.on { color: #17181c; }
+  body.light .text-input { background: #ffffff; border-color: rgba(20, 24, 12, .16); color: var(--text); }
+  body.light .btn-sm { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: var(--text); }
+  body.light .btn-sm:active { background: rgba(20, 24, 12, .1); }
+  body.light .btn-sm.accent { background: #2E8EF0; color: #ffffff; }
+
+  /* В светлой теме выбранное выделяется голубым (в тёмной — лаймовым). */
+  body.light .chip.on { background: #2E8EF0; color: #ffffff; border-color: transparent; }
+  body.light .day.on { background: #2E8EF0; color: #ffffff; border-color: transparent; }
+  body.light .switch[aria-checked="true"] { background: #2E8EF0; border-color: transparent; }
+  body.light .switch[aria-checked="true"] span { background: #ffffff; }
+  body.light .sound.selected .radio { border-color: #2E8EF0; background: #2E8EF0; }
+  body.light .sound.selected .radio::after { background: #ffffff; }
+  body.light .set-value { color: #2E8EF0; }
+  body.light .text-input:focus { border-color: rgba(46, 142, 240, .6); }
+  body.light input[type="range"] { accent-color: #2E8EF0; }
+  body.light .hdot { background: #2E8EF0; }
+  body.light .hdot.bad { background: var(--danger); }
+  body.light .health + .health { border-top-color: rgba(20, 24, 12, .07); }
+  body.light .htext { color: var(--text); }
+  body.light .choice { background: #ffffff; border-color: rgba(20, 24, 12, .12); }
+  body.light .choice:active { background: #f0f0ec; }
+
+  .set-head .chips { margin-left: auto; }
+
+  @media (max-height: 640px) {
+    .daysrow { padding-bottom: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <section class="display">
+    <div class="statusline">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="statusText">Будильник выключен</span>
+      <button class="power gear" id="gearBtn" type="button" aria-label="Настройки">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h10M18 7h2M4 17h2M10 17h10"/>
+          <circle cx="16" cy="7" r="2"/>
+          <circle cx="8" cy="17" r="2"/>
+        </svg>
+      </button>
+      <button class="power" id="powerBtn" type="button" aria-label="Включить или отключить будильник">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 3v9"/>
+          <path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="timeblock">
+      <button class="time" id="timeBtn" type="button" aria-label="Изменить время будильника">07:30</button>
+      <div class="meta">
+        <span id="nowText">--:--</span>
+        <span class="mid" aria-hidden="true"></span>
+        <span id="nextText">нажмите, чтобы настроить</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="settings">
+    <div class="card" id="card">
+      <button class="row" id="soundRow" type="button">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18V6l10-2v12"/>
+            <circle cx="6" cy="18" r="3"/>
+            <circle cx="16" cy="16" r="3"/>
+          </svg>
+        </span>
+        <span class="labels">
+          <span class="label">Звук будильника</span>
+          <span class="value" id="soundValue">По умолчанию</span>
+        </span>
+        <span class="chev" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M9 6l6 6-6 6"/>
+          </svg>
+        </span>
+      </button>
+
+      <div class="sep"></div>
+
+      <div class="row static">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 2l4 4-4 4"/>
+            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+            <path d="M7 22l-4-4 4-4"/>
+            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+          </svg>
+        </span>
+        <span class="labels">
+          <span class="label">Повторять</span>
+          <span class="value" id="repeatValue">Каждый день</span>
+        </span>
+        <button class="switch" id="repeatSwitch" type="button" role="switch" aria-checked="true" aria-label="Повторять будильник">
+          <span></span>
+        </button>
+      </div>
+
+      <div class="daysrow" id="daysRow" role="group" aria-label="Дни недели">
+        <button class="day" type="button" data-day="0">Пн</button>
+        <button class="day" type="button" data-day="1">Вт</button>
+        <button class="day" type="button" data-day="2">Ср</button>
+        <button class="day" type="button" data-day="3">Чт</button>
+        <button class="day" type="button" data-day="4">Пт</button>
+        <button class="day weekend" type="button" data-day="5">Сб</button>
+        <button class="day weekend" type="button" data-day="6">Вс</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="actions">
+    <button class="action snooze" id="snoozeBtn" type="button">
+      <span class="act-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
+          <path d="M10.3 21a2 2 0 0 0 3.4 0"/>
+        </svg>
+      </span>
+      <span class="action-title">Остановить</span>
+      <span class="action-sub" id="snoozeSub">Отложить на 10 минут</span>
+    </button>
+
+    <button class="action disable" id="disableBtn" type="button">
+      <span class="act-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 3v9"/>
+          <path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>
+        </svg>
+      </span>
+      <span class="action-title">Отключить</span>
+      <span class="action-sub">На сутки или совсем</span>
+    </button>
+  </section>
+</div>
+
+<!-- Отключить: на сутки или совсем -->
+<div class="overlay" id="disableOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="disableTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="disableTitle">Отключить будильник</h2>
+      <button class="close" type="button" data-close="disable" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <button class="choice" id="disableDayBtn" type="button">
+      <span class="choice-title">На сутки</span>
+      <span class="choice-sub">Пропустить ближайший звонок. Дальше будильник работает, как обычно.</span>
+    </button>
+    <button class="choice" id="disableForeverBtn" type="button">
+      <span class="choice-title">Совсем</span>
+      <span class="choice-sub">Выключить будильник полностью, пока не включите снова.</span>
+    </button>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" type="button" data-close="disable">Отмена</button>
+    </div>
+  </div>
+</div>
+
+<!-- Время -->
+<div class="overlay" id="timeOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="timeTitle">Время будильника</h2>
+      <button class="close" type="button" data-close="time" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <input class="time-input" id="timeInput" type="time" step="60" aria-label="Время будильника">
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" type="button" data-close="time">Отмена</button>
+      <button class="btn btn-primary" type="button" id="timeSave">Готово</button>
+    </div>
+  </div>
+</div>
+
+<!-- Звук -->
+<div class="overlay" id="soundOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="soundTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="soundTitle">Звук будильника</h2>
+      <button class="close" type="button" data-close="sound" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="hint">Системные звуки будильника вашего устройства</p>
+    <div class="sound-list" id="soundList"></div>
+    <button class="btn-sm add-file" id="addFileBtn" type="button">+ Выбрать свой файл…</button>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" type="button" data-close="sound">Готово</button>
+    </div>
+  </div>
+</div>
+
+<!-- Настройки -->
+<div class="overlay" id="moreOverlay" aria-hidden="true">
+  <div class="sheet tall" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="moreTitle">Настройки</h2>
+      <button class="close" type="button" data-close="more" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-scroll" id="moreScroll">
+
+      <div class="group-title">Оформление</div>
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Тема</span>
+          <div class="chips" data-key="theme">
+            <button class="chip" type="button" data-v="0">Тёмная</button>
+            <button class="chip" type="button" data-v="1">Светлая</button>
+          </div>
+        </div>
+        <div class="set-hint">Тема применяется и к экрану звонка.</div>
+      </div>
+
+      <div class="group-title">Будильник</div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Название</span></div>
+        <input class="text-input" id="labelInput" type="text" maxlength="24" placeholder="Например, «Работа»" autocomplete="off">
+      </div>
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Вибрация</span>
+          <button class="switch" id="vibrateSwitch" type="button" role="switch" aria-checked="true" aria-label="Вибрация"><span></span></button>
+        </div>
+      </div>
+
+      <div class="group-title">Звук</div>
+      <div class="set">
+        <div class="set-head">
+          <span class="set-title">Громкость</span>
+          <span class="set-value" id="volumeValue">Как в системе</span>
+        </div>
+        <input type="range" id="volumeRange" min="0" max="100" step="5" value="0" aria-label="Громкость будильника">
+        <div class="set-hint">Если задана, на время звонка меняет громкость будильника в системе, потом возвращает.</div>
+      </div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Нарастание громкости</span></div>
+        <div class="chips" data-key="fadeSeconds">
+          <button class="chip" type="button" data-v="0">Выкл</button>
+          <button class="chip" type="button" data-v="15">15 с</button>
+          <button class="chip" type="button" data-v="30">30 с</button>
+          <button class="chip" type="button" data-v="60">1 мин</button>
+        </div>
+      </div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Автоостановка</span></div>
+        <div class="chips" data-key="autoStopMinutes">
+          <button class="chip" type="button" data-v="1">1 мин</button>
+          <button class="chip" type="button" data-v="5">5 мин</button>
+          <button class="chip" type="button" data-v="10">10 мин</button>
+          <button class="chip" type="button" data-v="15">15 мин</button>
+          <button class="chip" type="button" data-v="30">30 мин</button>
+          <button class="chip" type="button" data-v="0">Никогда</button>
+        </div>
+        <div class="set-hint">Через это время звонок сам замолчит.</div>
+      </div>
+
+      <div class="group-title">Откладывание</div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Отложить на</span></div>
+        <div class="chips" data-key="snoozeMinutes">
+          <button class="chip" type="button" data-v="5">5 мин</button>
+          <button class="chip" type="button" data-v="10">10 мин</button>
+          <button class="chip" type="button" data-v="15">15 мин</button>
+          <button class="chip" type="button" data-v="20">20 мин</button>
+          <button class="chip" type="button" data-v="30">30 мин</button>
+        </div>
+      </div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Сколько раз можно откладывать</span></div>
+        <div class="chips" data-key="maxSnoozes">
+          <button class="chip" type="button" data-v="0">Без лимита</button>
+          <button class="chip" type="button" data-v="1">1</button>
+          <button class="chip" type="button" data-v="3">3</button>
+          <button class="chip" type="button" data-v="5">5</button>
+        </div>
+      </div>
+
+      <div class="group-title">Отключение</div>
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Решить пример</span>
+          <button class="switch" id="challengeSwitch" type="button" role="switch" aria-checked="false" aria-label="Решить пример для отключения"><span></span></button>
+        </div>
+        <div class="set-hint">Чтобы отключить будильник, сначала решите пример — потом выберите «на сутки или совсем». Помогает окончательно проснуться.</div>
+      </div>
+      <div class="set" id="challengeNumbersSet" hidden>
+        <div class="set-head nomargin">
+          <span class="set-title">Чисел в примере</span>
+          <div class="chips" data-key="challengeNumbers">
+            <button class="chip" type="button" data-v="2">Два</button>
+            <button class="chip" type="button" data-v="3">Три</button>
+          </div>
+        </div>
+        <div class="set-hint">Три числа — чуть сложнее: «12 + 7 − 4» или «3 × 4 + 6». Всё по силам в уме.</div>
+      </div>
+
+      <div class="group-title">Действия</div>
+      <div class="set">
+        <div class="btn-row">
+          <button class="btn-sm" id="skipBtn" type="button">Пропустить ближайший</button>
+          <button class="btn-sm" id="testBtn" type="button">Проверить звонок</button>
+        </div>
+        <div class="set-hint" id="skipHint"></div>
+      </div>
+
+      <div id="healthGroup">
+        <div class="group-title">Надёжность</div>
+        <div class="set" id="healthList"></div>
+      </div>
+
+      <div id="diagGroup">
+        <div class="group-title">Диагностика</div>
+        <div class="set">
+          <div class="btn-row">
+            <button class="btn-sm" id="diagClear" type="button">Очистить</button>
+            <button class="btn-sm accent" id="diagExport" type="button">Выгрузить</button>
+          </div>
+          <div class="set-hint">Журнал работы после перезагрузок и сбоев. «Выгрузить» — отправить текстом в мессенджер.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
