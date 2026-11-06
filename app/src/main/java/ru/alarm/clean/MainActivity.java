@@ -38,17 +38,28 @@ public class MainActivity extends Activity {
             @Override
             public void uncaughtException(Thread thread, Throwable error) {
                 try {
-                    AlarmScheduler.logLine(MainActivity.this, "СБОЙ: "
+                    AlarmScheduler.logLine(MainActivity.this, "СБОЙ в потоке «" + thread.getName() + "»: "
                             + error.getClass().getSimpleName()
                             + (error.getMessage() != null ? " " + error.getMessage() : ""));
                     StackTraceElement[] stack = error.getStackTrace();
-                    int limit = Math.min(2, stack.length);
+                    int limit = Math.min(10, stack.length);
                     for (int i = 0; i < limit; i++) {
                         AlarmScheduler.logLine(MainActivity.this, "  у " + stack[i]);
                     }
-                    if (error.getCause() != null) {
-                        AlarmScheduler.logLine(MainActivity.this,
-                                "  причина: " + error.getCause().getClass().getSimpleName());
+                    /* Вся цепочка причин — часто настоящий источник не в первом исключении. */
+                    Throwable cause = error.getCause();
+                    int depth = 0;
+                    while (cause != null && depth < 5) {
+                        AlarmScheduler.logLine(MainActivity.this, "причина (" + (depth + 1) + "): "
+                                + cause.getClass().getSimpleName()
+                                + (cause.getMessage() != null ? " " + cause.getMessage() : ""));
+                        StackTraceElement[] causeStack = cause.getStackTrace();
+                        int causeLimit = Math.min(5, causeStack.length);
+                        for (int i = 0; i < causeLimit; i++) {
+                            AlarmScheduler.logLine(MainActivity.this, "  у " + causeStack[i]);
+                        }
+                        cause = cause.getCause();
+                        depth++;
                     }
                 } catch (Exception ignored) {
                 }
@@ -70,6 +81,14 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(appBackground);
+        /* Записываем версию и процесс: видно, какое обновление сейчас работает. */
+        try {
+            String v = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            AlarmScheduler.logLine(this, "Запуск: версия " + v
+                    + ", процесс " + android.os.Process.myPid());
+        } catch (Exception ignored) {
+        }
+
         webView.setLongClickable(false);
         webView.setHapticFeedbackEnabled(false);
         webView.setOnLongClickListener(new View.OnLongClickListener() {
@@ -176,6 +195,12 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
+        /* Событие сворачивания/простоя приложения: помогает отличать
+           «закрыл» от «упало» или «убило системой». */
+        try {
+            AlarmScheduler.logLine(this, "Приложение скрыто");
+        } catch (Exception ignored) {
+        }
         if (bridge != null) {
             bridge.stopPreview();
         }
@@ -183,6 +208,15 @@ public class MainActivity extends Activity {
             webView.onPause();
         }
         super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        try {
+            AlarmScheduler.logLine(this, "Приложение в фоне (onStop)");
+        } catch (Exception ignored) {
+        }
+        super.onStop();
     }
 
     void runJs(final String js) {
@@ -226,6 +260,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        try {
+            AlarmScheduler.logLine(this, "Приложение закрыто (onDestroy)");
+        } catch (Exception ignored) {
+        }
         if (bridge != null) {
             bridge.release();
             bridge = null;

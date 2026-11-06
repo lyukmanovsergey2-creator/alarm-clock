@@ -10,8 +10,8 @@ SRC="$ROOT/app/src/main"
 BUILD="$ROOT/build"
 ANDROID_JAR="${ANDROID_JAR:-$HOME/android.jar}"
 DX="${DX:-$(command -v dx || echo /usr/lib/android-sdk/build-tools/debian/dx)}"
-VERSION_CODE="${VERSION_CODE:-10}"
-VERSION_NAME="${VERSION_NAME:-2.8}"
+VERSION_CODE="${VERSION_CODE:-11}"
+VERSION_NAME="${VERSION_NAME:-2.9}"
 OUT="${OUT:-$ROOT/AlarmClock.apk}"
 
 [ -f "$ANDROID_JAR" ] || { echo "Не найден android.jar: $ANDROID_JAR"; exit 1; }

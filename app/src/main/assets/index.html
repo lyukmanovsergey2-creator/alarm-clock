@@ -22,6 +22,10 @@
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+  /* Атрибут hidden всегда сильнее наших display-правил (иначе кнопки звонка
+     показывались и в обычном режиме). */
+  [hidden] { display: none !important; }
+
   html, body {
     height: 100%;
     margin: 0;
@@ -684,7 +688,7 @@
   .arow:active { background: rgba(255, 255, 255, .04); }
 
   .atime {
-    font-size: 26px;
+    font-size: 31px;
     font-weight: 300;
     letter-spacing: -.03em;
     font-variant-numeric: tabular-nums;
@@ -702,14 +706,14 @@
     gap: 2px;
   }
   .alabel {
-    font-size: 14px;
+    font-size: 16px;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .asub {
-    font-size: 11.5px;
+    font-size: 13px;
     color: var(--dim);
     white-space: nowrap;
     overflow: hidden;
@@ -719,10 +723,12 @@
 
   .arow .switch { flex: 0 0 auto; }
 
-  /* ————— Нижняя треть: создание / звонок ————— */
-  .actions.single { grid-template-columns: 1fr; }
+  /* ————— Нижняя треть: звонок или создание ————— */
+  .actions.single {
+    grid-template-columns: 1fr;
+    align-content: end; /* кнопка создания прижата вниз */
+  }
   .create { width: 100%; }
-  .create .act-icon { color: #0b0b0d; }
 
   body.light .arow { border-bottom-color: rgba(20, 24, 12, .07); }
   body.light .arow:active { background: rgba(20, 24, 12, .05); }
@@ -944,11 +950,6 @@
     <div class="statusline">
       <span class="dot" aria-hidden="true"></span>
       <span id="statusText">Будильников нет</span>
-      <button class="power" id="addBtn" type="button" aria-label="Новый будильник">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-      </button>
       <button class="power gear" id="gearBtn" type="button" aria-label="Настройки">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 7h10M18 7h2M4 17h2M10 17h10"/>
@@ -977,11 +978,6 @@
 
   <section class="actions single">
     <button class="action snooze create" id="createBtn" type="button">
-      <span class="act-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 5v14M5 12h14"/>
-        </svg>
-      </span>
       <span class="action-title">Создать будильник</span>
       <span class="action-sub" id="createSub">до 15 будильников</span>
     </button>
@@ -1259,7 +1255,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <p class="hint">Чтобы проверять наличие новой версии, приложению нужен доступ в интернет: раз в сутки выполняется один запрос к странице релизов (GitHub). Во время звонка проверка молчит, узнавшее расписание не трогает. Разрешение можно отозвать в любой момент — выключите «Проверять новые версии».</p>
+    <p class="hint">Чтобы проверять наличие новой версии, приложению нужен доступ в интернет: раз в сутки выполняется один запрос к странице релизов (GitHub). Во время звонка будильника проверка молчит, расписание не трогает. Разрешение можно отозвать в любой момент — выключите «Проверять новые версии».</p>
     <div class="sheet-actions">
       <button class="btn btn-ghost" type="button" id="permDeny">Не разрешать</button>
       <button class="btn btn-primary" type="button" id="permAllow">Разрешить</button>
@@ -1277,7 +1273,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <p class="hint">Доступна версия <span id="updateVersion">—</span>. Обновление скачивается и открывается через системный установщик. Будильники, настройки и звук сохраняются.</p>
+    <p class="hint">Доступна версия <span id="updateVersion">—</span>. «Обновить» откроет в браузере страницу релизов: скачайте APK и установите его как обычный файл. Будильники, настройки и звук сохраняются.</p>
     <div class="sheet-actions">
       <button class="btn btn-ghost" type="button" id="updateLater">Позже</button>
       <button class="btn btn-primary" type="button" id="updateNow">Обновить</button>

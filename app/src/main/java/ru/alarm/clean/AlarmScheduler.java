@@ -218,7 +218,7 @@ final class AlarmScheduler {
                     java.util.Locale.US).format(new java.util.Date());
             StringBuilder buffer = new StringBuilder();
             String[] lines = old.split("\n");
-            int from = Math.max(0, lines.length - 60);
+            int from = Math.max(0, lines.length - 150);
             for (int i = from; i < lines.length; i++) {
                 if (!lines[i].isEmpty()) buffer.append(lines[i]).append('\n');
             }

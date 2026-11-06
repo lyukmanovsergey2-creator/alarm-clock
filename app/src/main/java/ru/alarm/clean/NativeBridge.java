@@ -549,28 +549,19 @@ public class NativeBridge {
         });
     }
 
-    /** Скачивание APK найденной версии и открытие установщика. */
+    /** Кнопка «Обновить»: страница релизов в браузере (установка вручную). */
     @JavascriptInterface
-    public void downloadUpdate() {
+    public void openUpdatePage() {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
                 try {
-                    UpdateChecker.download(activity);
+                    UpdateChecker.openReleasePage(activity);
                 } catch (Exception e) {
-                    toast("Не удалось начать скачивание");
+                    toast("Не удалось открыть браузер");
                 }
             }
         });
-    }
-
-    /** Забывает найденное обновление (пользователь выключил проверку). */
-    @JavascriptInterface
-    public void discardUpdate() {
-        try {
-            UpdateChecker.clearPending(AlarmScheduler.prefs(activity));
-        } catch (Exception ignored) {
-        }
     }
 
     /* ————— Диагностика ————— */

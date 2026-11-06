@@ -2,19 +2,14 @@ package ru.alarm.clean;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
-import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -24,28 +19,33 @@ import java.net.URL;
  * По умолчанию выключена. Включается пользователем после явного согласия
  * (диалог «Разрешить доступ к интернету»). Если включена — раз в сутки
  * при открытии приложения делается фоновый запрос к странице релизов на GitHub.
- * Найдена новая версия — интерфейс показывает «Обновить / Позже». Обновления
- * никак не касаются будильников: проверка молчит во время звонка и не трогает
- * расписание. «Позже» — предложение повторится при следующей проверке.
+ * Найдена новая версия — интерфейс показывает «Обновить / Позже».
+ *
+ * Важно: приложение само не скачивает и не устанавливает APK —
+ * кнопка «Обновить» открывает страницу релизов в браузере, установку
+ * выполняет пользователь вручную. Это убирает разрешение
+ * REQUEST_INSTALL_PACKAGES, на которое ругается Google Play Защита.
+ * Обновления никак не касаются будильников: проверка молчит во время
+ * звонка и не трогает расписание. «Позже» — предложение повторится
+ * при следующей проверке.
  */
 final class UpdateChecker {
 
     static final String K_ENABLED = "updateCheck";
     private static final String K_LAST = "updateLastCheckAt";
-    private static final String K_PENDING_VERSION = "updatePendingVersion";
-    private static final String K_PENDING_URL = "updatePendingUrl";
     /* Публичный адрес релизов приложения (без авторизации). */
     private static final String RELEASES_URL =
             "https://api.github.com/repos/lyukmanovsergey2-creator/alarm-clock/releases/latest";
+    private static final String RELEASES_PAGE =
+            "https://github.com/lyukmanovsergey2-creator/alarm-clock/releases/latest";
     private static final long CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000; /* раз в сутки */
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static volatile boolean busy = false;
-    private static volatile boolean downloading = false;
 
     private UpdateChecker() {
     }
 
-    static boolean enabled(SharedPreferences prefs) {
+    static boolean enabled(android.content.SharedPreferences prefs) {
         return prefs.getBoolean(K_ENABLED, false);
     }
 
@@ -55,7 +55,7 @@ final class UpdateChecker {
             if (AlarmService.running || busy) {
                 return;
             }
-            SharedPreferences prefs = AlarmScheduler.prefs(activity);
+            android.content.SharedPreferences prefs = AlarmScheduler.prefs(activity);
             if (!enabled(prefs)) {
                 return;
             }
@@ -73,9 +73,6 @@ final class UpdateChecker {
     /**
      * Проверка релизов. manual=true — по кнопке «Проверить сейчас»,
      * результат показывается даже если новой версии нет.
-     *
-     * @param clearLast проверяющий запрос не учитывается в суточном таймере
-     *                  (для случая «согласие дано — проверяем немедленно»).
      */
     static void checkNow(final Activity activity, final boolean manual) {
         if (busy) {
@@ -88,7 +85,7 @@ final class UpdateChecker {
                 boolean ok = false;
                 String resultError = "";
                 try {
-                    SharedPreferences prefs = AlarmScheduler.prefs(activity);
+                    android.content.SharedPreferences prefs = AlarmScheduler.prefs(activity);
                     prefs.edit().putLong(K_LAST, System.currentTimeMillis()).apply();
 
                     String current = currentVersion(activity);
@@ -105,32 +102,15 @@ final class UpdateChecker {
                     JSONObject release = new JSONObject(body);
                     String tag = release.optString("tag_name", "");
                     String version = versionFromTag(tag);
-                    String apkUrl = "";
-                    JSONArray assets = release.optJSONArray("assets");
-                    for (int i = 0; assets != null && i < assets.length(); i++) {
-                        JSONObject asset = assets.getJSONObject(i);
-                        if (asset.optString("name", "").toLowerCase().endsWith(".apk")) {
-                            apkUrl = asset.optString("browser_download_url", "");
-                            break;
-                        }
-                    }
-                    if (version == null || apkUrl.isEmpty()) {
-                        throw new Exception("релиз без APK (" + tag + ")");
+                    if (version == null) {
+                        throw new Exception("версия не распознана (" + tag + ")");
                     }
                     boolean newer = isNewer(version, current);
-                    if (newer) {
-                        prefs.edit()
-                                .putString(K_PENDING_VERSION, version)
-                                .putString(K_PENDING_URL, apkUrl)
-                                .apply();
-                    } else {
-                        clearPending(prefs);
-                    }
                     AlarmScheduler.logLine(activity, "update: текущая " + current
                             + ", релиз " + version + ", есть новая=" + newer);
                     JSONObject out = new JSONObject();
                     out.put("available", newer);
-                    out.put("version", newer ? version : current);
+                    out.put("version", version);
                     out.put("manual", manual);
                     postJs(activity, "__onUpdateCheck", out.toString());
                     ok = true;
@@ -163,106 +143,17 @@ final class UpdateChecker {
         }).start();
     }
 
-    /** Скачивает APK обновления в кеш приложения, по завершении открывает установку. */
-    static void download(final Activity activity) {
-        if (downloading) {
-            return;
-        }
-        final SharedPreferences prefs = AlarmScheduler.prefs(activity);
-        final String url = prefs.getString(K_PENDING_URL, "");
-        if (url == null || url.isEmpty()) {
-            Toast.makeText(activity, "Нет данных об обновлении", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        downloading = true;
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                DownloadResult result = new DownloadResult();
-                try {
-                    File dir = new File(activity.getCacheDir(), "update");
-                    dir.mkdirs();
-                    File target = new File(dir, "update.apk");
-                    if (target.exists()) {
-                        target.delete();
-                    }
-                    HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                    conn.setConnectTimeout(15000);
-                    conn.setReadTimeout(30000);
-                    conn.setRequestProperty("User-Agent", "CleanAlarm-App");
-                    long total = conn.getContentLength();
-                    InputStream in = conn.getInputStream();
-                    OutputStream out = new FileOutputStream(target);
-                    byte[] buffer = new byte[8192];
-                    long done = 0;
-                    int lastPct = -1;
-                    int n;
-                    while ((n = in.read(buffer)) > 0) {
-                        out.write(buffer, 0, n);
-                        done += n;
-                        if (total > 0) {
-                            int pct = (int) (done * 100 / total);
-                            if (pct / 10 > lastPct / 10) {
-                                lastPct = pct;
-                                postJs(activity, "__onUpdateProgress", String.valueOf(pct));
-                            }
-                        }
-                    }
-                    out.flush();
-                    closeQuietly(out);
-                    closeQuietly(in);
-                    if (target.length() < 4096) {
-                        throw new Exception("файл слишком мал");
-                    }
-                    result.ok = true;
-                } catch (final Exception exception) {
-                    result.error = exception.getClass().getSimpleName()
-                            + (exception.getMessage() != null ? " " + exception.getMessage() : "");
-                }
-                MAIN.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        downloading = false;
-                        if (result.ok) {
-                            AlarmScheduler.logLine(activity, "update: APK скачан — открываю установку");
-                            installOnMain(activity);
-                        } else {
-                            AlarmScheduler.logLine(activity, "update: скачивание НЕ удалось: " + result.error);
-                            Toast.makeText(activity, "Скачивание не удалось", Toast.LENGTH_LONG).show();
-                        }
-                    }
-                });
-            }
-        }).start();
-    }
-
-    private static final class DownloadResult {
-        boolean ok;
-        String error;
-    }
-
-    /** Открывает системный установщик с уже скачанным файлом. */
-    private static void installOnMain(Activity activity) {
+    /** Кнопка «Обновить»: открывает страницу релизов в браузере. */
+    static void openReleasePage(Activity activity) {
         try {
-            File apk = new File(activity.getCacheDir(), "update/update.apk");
-            if (!apk.exists() || apk.length() == 0) {
-                Toast.makeText(activity, "Файл обновления не найден", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            Uri uri = Uri.parse("content://" + UpdateSourceProvider.AUTHORITY + "/update/update.apk");
-            Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-            intent.setDataAndType(uri, "application/vnd.android.package-archive");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, activity.getPackageName());
-            activity.startActivity(intent);
+            AlarmScheduler.logLine(activity, "update: открываю страницу релизов");
+            Intent browser = new Intent(Intent.ACTION_VIEW, Uri.parse(RELEASES_PAGE));
+            activity.startActivity(browser);
         } catch (Exception exception) {
-            AlarmScheduler.logLine(activity, "update: установка НЕ началась: " + exception);
-            Toast.makeText(activity, "Установщик не открылся", Toast.LENGTH_LONG).show();
+            AlarmScheduler.logLine(activity, "update: браузер не открылся: " + exception);
+            android.widget.Toast.makeText(activity, "Не удалось открыть браузер",
+                    android.widget.Toast.LENGTH_LONG).show();
         }
-    }
-
-    static void clearPending(SharedPreferences prefs) {
-        prefs.edit().putString(K_PENDING_VERSION, "").putString(K_PENDING_URL, "").apply();
     }
 
     private static String currentVersion(Activity activity) {
@@ -319,7 +210,7 @@ final class UpdateChecker {
         }
     }
 
-    private static void postJs(Activity activity, String function, String json) {
+    private static void postJs(final Activity activity, final String function, final String json) {
         MAIN.post(new Runnable() {
             @Override
             public void run() {
@@ -339,21 +230,10 @@ final class UpdateChecker {
         while ((n = in.read(buffer)) > 0) {
             out.write(buffer, 0, n);
         }
-        closeQuietly(in);
+        try {
+            in.close();
+        } catch (Exception ignored) {
+        }
         return out.toString("UTF-8");
-    }
-
-    private static void closeQuietly(OutputStream out) {
-        try {
-            if (out != null) out.close();
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static void closeQuietly(InputStream in) {
-        try {
-            if (in != null) in.close();
-        } catch (Exception ignored) {
-        }
     }
 }

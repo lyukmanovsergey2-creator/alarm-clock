@@ -10,8 +10,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Проверка обновлений (необязательная, только по согласию пользователя). -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Установка скачанного APK через системный установщик. -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -82,12 +80,5 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
-
-        <!-- Отдача скачанного APK обновления системному установщику. -->
-        <provider
-            android:name=".UpdateSourceProvider"
-            android:authorities="ru.alarm.clean.apk"
-            android:exported="false"
-            android:grantUriPermissions="true" />
     </application>
 </manifest>

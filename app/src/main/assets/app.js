@@ -31,7 +31,6 @@
   var card = $('card');
   var timeBtn = $('timeBtn');
   var gearBtn = $('gearBtn');
-  var addBtn = $('addBtn');
   var statusText = $('statusText');
   var nextText = $('nextText');
   var nowText = $('nowText');
@@ -941,9 +940,6 @@
       saveState();
       render();
       pushSettings();
-      if (bridge && typeof bridge.discardUpdate === 'function') {
-        try { bridge.discardUpdate(); } catch (e) { /* ignore */ }
-      }
       toast('Проверка обновлений выключена');
     } else {
       /* Включаем только после явного согласия на доступ в интернет. */
@@ -994,8 +990,8 @@
 
   $('updateNow').addEventListener('click', function () {
     closeSheet(updateOverlay);
-    if (bridge && typeof bridge.downloadUpdate === 'function') {
-      try { bridge.downloadUpdate(); } catch (e) { toast('Не удалось начать скачивание'); }
+    if (bridge && typeof bridge.openUpdatePage === 'function') {
+      try { bridge.openUpdatePage(); } catch (e) { toast('Не удалось открыть браузер'); }
     } else {
       toast('Обновление доступно в приложении');
     }
@@ -1024,12 +1020,6 @@
     }
   };
 
-  /* Прогресс скачивания в процентах (приходит каждые 10%). */
-  window.__onUpdateProgress = function (pct) {
-    var n = parseInt(pct, 10);
-    if (isFinite(n) && n > 0 && n < 100) toast('Скачивание: ' + n + '%');
-  };
-
   $('volumeRange').addEventListener('input', function () {
     state.volume = clamp(parseInt(this.value, 10) || 0, 0, 100);
     $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
@@ -1037,7 +1027,6 @@
   $('volumeRange').addEventListener('change', function () { saveState(); render(); pushSettings(); });
 
   /* ————— События ————— */
-  addBtn.addEventListener('click', function () { openEditor(-1); });
   createBtn.addEventListener('click', function () { openEditor(-1); });
 
   timeBtn.addEventListener('click', function () {
