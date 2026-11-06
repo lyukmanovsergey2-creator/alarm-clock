@@ -35,7 +35,6 @@
   var nextText = $('nextText');
   var nowText = $('nowText');
   var metaMid = $('metaMid');
-  var soundValue = $('soundValue');
   var alarmList = $('alarmList');
   var emptyHint = $('emptyHint');
   var snoozeBtn = $('snoozeBtn');
@@ -59,6 +58,12 @@
   var alarmSaveBtn = $('alarmSave');
   var deleteAlarmBtn = $('deleteAlarmBtn');
   var alarmTitle = $('alarmTitle');
+  /* Куда пишется выбор мелодии: 'global' (по умолчанию) или 'alarm' (редактор будильника) */
+  var picking = 'global';
+  /* Рабочая копия сигнализации в редакторе */
+  var editAlarm = null;
+  var openSwipe = null; /* открытая строка (свайп-удаление) */
+  var swiping = false;  /* активный жест свайпа — рендер списка отложен */
 
   var bridge = window.NativeAlarm || null;
   var state = loadState();
@@ -133,6 +138,28 @@
           if (al) result.alarms.push(al);
         }
       }
+      /* Перенос с 2.9: у будильников, созданных раньше, персональных
+         настроек ещё нет — наливаем их из прежних общих значений. */
+      var needSeed = false;
+      for (var si = 0; si < result.alarms.length; si++) {
+        if (typeof result.alarms[si].soundUri !== 'string') { needSeed = true; break; }
+      }
+      if (needSeed) {
+        for (var sj = 0; sj < result.alarms.length; sj++) {
+          var alarmSeed = result.alarms[sj];
+          if (typeof alarmSeed.soundUri !== 'string') {
+            alarmSeed.soundUri = typeof s.soundUri === 'string' ? s.soundUri : '';
+            alarmSeed.volume = result.volume;
+            alarmSeed.fadeSeconds = result.fadeSeconds;
+            alarmSeed.autoStopMinutes = result.autoStopMinutes;
+            alarmSeed.snoozeMinutes = result.snoozeMinutes;
+            alarmSeed.maxSnoozes = result.maxSnoozes;
+            alarmSeed.vibrate = result.vibrate;
+            alarmSeed.challenge = result.challenge;
+            alarmSeed.challengeNumbers = result.challengeNumbers;
+          }
+        }
+      }
     } catch (e) {
       /* повреждённые данные — значения по умолчанию */
     }
@@ -173,7 +200,7 @@
     if (!a || typeof a !== 'object') return null;
     var id = parseInt(num(a.id, -1), 10);
     if (!(id >= 0)) return null;
-    return {
+    var out = {
       id: id,
       enabled: !!a.enabled,
       hour: clamp(parseInt(num(a.hour, 7), 10), 0, 23),
@@ -182,6 +209,19 @@
       days: (parseInt(num(a.days, ALL_DAYS), 10) & ALL_DAYS) || ALL_DAYS,
       label: typeof a.label === 'string' ? a.label.slice(0, 24) : ''
     };
+    /* Персональные настройки (после 2.10 — у каждого будильника свои) */
+    if (typeof a.soundUri === 'string') {
+      out.soundUri = a.soundUri;
+      out.volume = clamp(parseInt(num(a.volume, 0), 10), 0, 100);
+      out.fadeSeconds = clamp(parseInt(num(a.fadeSeconds, 0), 10), 0, 300);
+      out.autoStopMinutes = clamp(parseInt(num(a.autoStopMinutes, 10), 10), 0, 120);
+      out.snoozeMinutes = clamp(parseInt(num(a.snoozeMinutes, 10), 10), 1, 120);
+      out.maxSnoozes = clamp(parseInt(num(a.maxSnoozes, 0), 10), 0, 20);
+      out.vibrate = a.vibrate !== false;
+      out.challenge = !!a.challenge;
+      out.challengeNumbers = clamp(parseInt(num(a.challengeNumbers, 2), 10), 2, 3);
+    }
+    return out;
   }
 
   function saveState() {
@@ -306,10 +346,8 @@
       timeBtn.textContent = '--:--';
       nowText.hidden = true;
       metaMid.hidden = true;
-      nextText.textContent = state.alarms.length === 0 ? 'нажмите «+», чтобы создать' : 'все выключены';
+      nextText.textContent = state.alarms.length === 0 ? 'создайте будильник кнопкой ниже' : 'все выключены';
     }
-
-    soundValue.textContent = state.soundTitle || 'По умолчанию';
 
     /* Нижняя секция: звонок или создание */
     var ringing = AlarmServiceRunning();
@@ -346,6 +384,8 @@
   }
 
   function renderList() {
+    if (swiping) return; /* свайп идёт — не перестраиваем список под пальцем */
+    openSwipe = null;
     alarmList.innerHTML = '';
     emptyHint.hidden = state.alarms.length > 0;
     for (var i = 0; i < state.alarms.length; i++) {
@@ -357,17 +397,34 @@
     var row = document.createElement('div');
     row.className = 'arow' + (a.enabled ? ' on' : '');
     row.setAttribute('data-id', String(a.id));
+    row._offset = 0;
+
+    /* Красная зона удаления — под содержимым строки */
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'rowdel';
+    del.setAttribute('aria-label', 'Удалить будильник ' + formatHM(a.hour, a.minute));
+    del.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+      + 'stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/>'
+      + '<path d="M6 6l1 14h10l1-14"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>'
+      + '<span class="rowdeltext">Удалить</span>';
+    row.appendChild(del);
+    row._del = del;
+
+    /* Содержимое строки — оно и сдвигается при свайпе */
+    var content = document.createElement('div');
+    content.className = 'rowcontent';
 
     /* Порядковый номер в перечне */
     var num = document.createElement('span');
     num.className = 'anum';
     num.textContent = number;
-    row.appendChild(num);
+    content.appendChild(num);
 
     var time = document.createElement('span');
     time.className = 'atime';
     time.textContent = formatHM(a.hour, a.minute);
-    row.appendChild(time);
+    content.appendChild(time);
 
     var info = document.createElement('span');
     info.className = 'ainfo';
@@ -384,7 +441,7 @@
     sub.textContent = a.repeat ? daysSummary(a) : 'Один раз';
     info.appendChild(label);
     info.appendChild(sub);
-    row.appendChild(info);
+    content.appendChild(info);
 
     var sw = document.createElement('button');
     sw.type = 'button';
@@ -397,11 +454,25 @@
       event.stopPropagation();
       toggleAlarm(a.id);
     });
-    row.appendChild(sw);
+    content.appendChild(sw);
 
-    row.addEventListener('click', function () {
+    row.appendChild(content);
+    row._content = content;
+
+    /* Тап по корзине удаляет — если строка приоткрыта свайпом */
+    del.addEventListener('click', function (event) {
+      event.stopPropagation();
+      if (openSwipe && openSwipe.row === row) removeAlarmById(a.id);
+    });
+
+    content.addEventListener('click', function () {
+      if (row._suppress) return; /* сразу после драга — клики игнорируем */
+      /* Тап по приоткрытой строке — отмена удаления */
+      if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
       openEditor(a.id);
     });
+
+    attachSwipe(row, a.id);
     return row;
   }
 
@@ -415,8 +486,166 @@
     toast(a.enabled ? 'Включён на ' + formatHM(a.hour, a.minute) : 'Будильник ' + formatHM(a.hour, a.minute) + ' выключен');
   }
 
+  /* ————— Свайп-удаление ————— */
+
+  function anySheetOpen() {
+    return moreOverlay.classList.contains('open') || soundOverlay.classList.contains('open')
+      || alarmOverlay.classList.contains('open') || disableOverlay.classList.contains('open')
+      || permOverlay.classList.contains('open') || updateOverlay.classList.contains('open');
+  }
+
+  /* Сдвиг строки: animate — с плавным возвратом */
+  function setRowOffset(row, offset, animate) {
+    var content = row._content;
+    if (!content) return;
+    content.style.transition = animate ? 'transform .22s ease' : 'none';
+    content.style.willChange = 'transform';
+    content.style.transform = 'translateX(' + offset + 'px)';
+    if (row._del) {
+      var width = row._del.offsetWidth || 190;
+      var reveal = Math.max(0, Math.min(1, Math.abs(Math.min(offset, 0)) / width));
+      row._del.style.opacity = String(reveal);
+    }
+  }
+
+  /* Оставить строку приоткрытой: корзина целиком видна */
+  function settleSwipe(row) {
+    var trash = row._del ? (row._del.offsetWidth || 190) : 190;
+    var target = -(trash + 30);
+    row._offset = target;
+    setRowOffset(row, target, true);
+    openSwipe = { row: row };
+  }
+
+  function closeOpenSwipe() {
+    if (!openSwipe) return;
+    var row = openSwipe.row;
+    openSwipe = null;
+    if (!row) return;
+    row._offset = 0;
+    setRowOffset(row, 0, true);
+  }
+
+  /* После драга гасим случайный click, чтобы не открылся редактор */
+  function suppressClick(row) {
+    row._suppress = true;
+    setTimeout(function () { row._suppress = false; }, 350);
+  }
+
+  function attachSwipe(row, id) {
+    var startX = 0, startY = 0, baseOffset = 0;
+    var tracking = false, decided = false, horizontal = false, moved = 0;
+
+    row.addEventListener('touchstart', function (event) {
+      if (event.touches.length !== 1) return;
+      if (anySheetOpen()) return;
+      /* Свайп по другой строке — сначала убрать открытую */
+      if (openSwipe && openSwipe.row !== row) closeOpenSwipe();
+      startX = event.touches[0].clientX;
+      startY = event.touches[0].clientY;
+      baseOffset = row._offset || 0;
+      tracking = true;
+      swiping = true;
+      decided = false;
+      horizontal = false;
+      moved = 0;
+    }, { capture: true, passive: true });
+
+    row.addEventListener('touchmove', function (event) {
+      if (!tracking) return;
+      var dx = event.touches[0].clientX - startX;
+      var dy = event.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        decided = true;
+        horizontal = Math.abs(dx) > Math.abs(dy);
+        if (!horizontal) { tracking = false; return; }
+      }
+      if (!horizontal) return;
+      moved = Math.max(moved, Math.abs(dx));
+      /* Только влево; ширина — по экрану */
+      var cap = -Math.round(window.innerWidth * 0.87);
+      var target = baseOffset + dx;
+      if (target > 0) target = 0;
+      if (target < cap) target = cap;
+      row._offset = target;
+      setRowOffset(row, target, false);
+      if (event.cancelable) event.preventDefault();
+    }, { passive: false });
+
+    row.addEventListener('touchend', function () {
+      if (!tracking) return;
+      tracking = false;
+      /* с маленькой задержкой: даём settle-анимации отработать без перерисовки */
+      setTimeout(function () { swiping = false; }, 260);
+      if (moved > 10) suppressClick(row);
+      var offset = row._offset || 0;
+      var width = window.innerWidth;
+      var trash = row._del ? (row._del.offsetWidth || 190) : 190;
+      var thresh = Math.round(width * 0.75);  /* свайп до 3/4 экрана — удалить */
+      var quarter = Math.round(width * 0.25); /* остановился до 1/4 — отмена */
+      var abs = -Math.min(offset, 0);
+      if (abs >= thresh) {
+        openSwipe = null;
+        removeAlarmById(id);
+        return;
+      }
+      if (abs < quarter) {
+        row._offset = 0;
+        setRowOffset(row, 0, true);
+        if (openSwipe && openSwipe.row === row) openSwipe = null;
+        return;
+      }
+      /* Остановился между 1/4 и 3/4: строка остаётся открытой, решение за тапом */
+      settleSwipe(row);
+    }, { capture: true, passive: true });
+
+    /* Система прервала жест — вернуть строку и снять блокировку рендера */
+    row.addEventListener('touchcancel', function () {
+      if (!tracking) { swiping = false; return; }
+      tracking = false;
+      row._offset = 0;
+      setRowOffset(row, 0, true);
+      if (openSwipe && openSwipe.row === row) openSwipe = null;
+      setTimeout(function () { swiping = false; }, 260);
+    }, { capture: true, passive: true });
+  }
+
+  /* Тап/фокус мимо открытой строки — отменить удаление */
+  document.addEventListener('touchstart', function (event) {
+    if (!openSwipe) return;
+    var target = event.target;
+    if (openSwipe.row && !openSwipe.row.contains(target)) closeOpenSwipe();
+  }, { capture: true, passive: true });
+
+  /* Удаление будильника по id: из свайпа или из редактора */
+  function removeAlarmById(id) {
+    swiping = false; /* жест завершён — список можно перестроить сразу */
+    var idx = -1;
+    for (var i = 0; i < state.alarms.length; i++) {
+      if (state.alarms[i].id === id) { idx = i; break; }
+    }
+    if (idx < 0) return;
+    if (ringingId === id) {
+      /* Удаляем будильник, который сейчас звонит — звонок прекращаем */
+      if (bridge && typeof bridge.stopRinging === 'function') {
+        try { bridge.stopRinging(); } catch (e) { /* ignore */ }
+      }
+      ringingId = -1;
+    }
+    state.alarms.splice(idx, 1);
+    openSwipe = null;
+    if (editing && editingId === id) {
+      closeSheet(alarmOverlay);
+    }
+    saveState();
+    render();
+    pushState();
+    toast('Будильник удалён');
+  }
+
   function renderSettings() {
-    var groups = moreOverlay.querySelectorAll('.chips');
+    var groups = moreOverlay.querySelectorAll('.chips[data-key]');
     for (var g = 0; g < groups.length; g++) {
       var key = groups[g].getAttribute('data-key');
       var chips = groups[g].querySelectorAll('.chip');
@@ -424,14 +653,7 @@
         chips[i].classList.toggle('on', Number(chips[i].getAttribute('data-v')) === state[key]);
       }
     }
-    $('vibrateSwitch').setAttribute('aria-checked', state.vibrate ? 'true' : 'false');
-    $('challengeSwitch').setAttribute('aria-checked', state.challenge ? 'true' : 'false');
     $('updateSwitch').setAttribute('aria-checked', state.updateCheck ? 'true' : 'false');
-    var challengeNumbers = $('challengeNumbersSet');
-    if (challengeNumbers) challengeNumbers.hidden = !state.challenge;
-    var vr = $('volumeRange');
-    if (document.activeElement !== vr) vr.value = state.volume;
-    $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
   }
 
   /* ————— Связь с Android ————— */
@@ -534,9 +756,20 @@
       if (state.customSounds[i].uri !== uri) list.push(state.customSounds[i]);
     }
     state.customSounds = list.slice(0, 8);
+    saveState();
+    if (picking === 'alarm' && editAlarm) {
+      /* Мелодия выбрана для конкретного будильника: общие не трогаем */
+      editAlarm.soundUri = uri;
+      editAlarm.soundTitle = title;
+      loadSoundList();
+      buildSoundList();
+      updateEditorSound();
+      if (soundOverlay.classList.contains('open')) closeSheet(soundOverlay);
+      toast('Звук выбран: ' + title);
+      return;
+    }
     state.soundTitle = title;
     state.soundUri = uri;
-    saveState();
     loadSoundList();
     render();
     pushSettings();
@@ -550,20 +783,53 @@
       if (state.customSounds[i].uri !== uri) list.push(state.customSounds[i]);
     }
     state.customSounds = list;
+    if (picking === 'alarm' && editAlarm && editAlarm.soundUri === uri) {
+      /* Удалённая мелодия была у этого будильника — откат на умолчание */
+      editAlarm.soundUri = '';
+      editAlarm.soundTitle = 'По умолчанию';
+      updateEditorSound();
+    }
     if (state.soundUri === uri) { state.soundUri = ''; state.soundTitle = 'По умолчанию'; }
     saveState();
     loadSoundList();
-    render();
-    pushSettings();
-    buildSoundList();
+    if (picking === 'alarm' && editAlarm) {
+      buildSoundList();
+    } else {
+      render();
+      pushSettings();
+      buildSoundList();
+    }
   }
 
   function selectSound(title, uri) {
+    if (picking === 'alarm' && editAlarm) {
+      /* Выбор в пользу конкретного будильника — и список закрывается */
+      editAlarm.soundUri = uri || '';
+      editAlarm.soundTitle = title;
+      buildSoundList();
+      updateEditorSound();
+      closeSheet(soundOverlay);
+      return;
+    }
     state.soundTitle = title;
     state.soundUri = uri || '';
     saveState();
     render();
     pushSettings();
+  }
+
+  /* Название мелодии по URI — для строки редактора */
+  function soundTitleByUri(uri) {
+    for (var i = 0; i < sounds.length; i++) {
+      if (sounds[i].uri === (uri || '')) return sounds[i].title || 'По умолчанию';
+    }
+    return uri ? 'Своя мелодия' : 'По умолчанию';
+  }
+
+  function updateEditorSound() {
+    var el = $('eSoundValue');
+    if (!el || !editAlarm) return;
+    el.textContent = soundTitleByUri(editAlarm.soundUri);
   }
 
   function playPreview(uri) {
@@ -612,9 +878,7 @@
   /* ————— Тосты ————— */
   function toast(message) {
     toastEl.textContent = message;
-    var sheetOpen = moreOverlay.classList.contains('open') || soundOverlay.classList.contains('open')
-      || alarmOverlay.classList.contains('open') || disableOverlay.classList.contains('open')
-      || permOverlay.classList.contains('open') || updateOverlay.classList.contains('open');
+    var sheetOpen = anySheetOpen();
     toastEl.classList.toggle('top', sheetOpen);
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
@@ -634,9 +898,13 @@
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
     stopPreview();
-    if (overlay === alarmOverlay) setTimeout(function () { timeInput.blur(); labelInput.blur(); }, 250);
+    if (overlay === alarmOverlay) {
+      editing = false;
+      editAlarm = null;
+      picking = 'global';
+      setTimeout(function () { timeInput.blur(); labelInput.blur(); }, 250);
+    }
     if (overlay === moreOverlay && document.activeElement) document.activeElement.blur();
-    if (overlay === alarmOverlay) editing = false;
     return wasOpen;
   }
 
@@ -659,7 +927,8 @@
   function buildSoundRow(sound) {
     var row = document.createElement('button');
     row.type = 'button';
-    row.className = 'sound' + (sound.uri === (state.soundUri || '') ? ' selected' : '');
+    var currentUri = (picking === 'alarm' && editAlarm) ? (editAlarm.soundUri || '') : (state.soundUri || '');
+    row.className = 'sound' + (sound.uri === currentUri ? ' selected' : '');
     row.setAttribute('data-uri', sound.uri || '');
     row.setAttribute('data-title', sound.title || 'По умолчанию');
 
@@ -704,6 +973,23 @@
   }
 
   /* ————— Редактор будильника ————— */
+
+  /* Персональные настройки по умолчанию: берём прежние общие значения */
+  function defaultAlarmSettings() {
+    return {
+      soundUri: state.soundUri || '',
+      soundTitle: state.soundTitle || 'По умолчанию',
+      volume: state.volume,
+      fadeSeconds: state.fadeSeconds,
+      autoStopMinutes: state.autoStopMinutes,
+      snoozeMinutes: state.snoozeMinutes,
+      maxSnoozes: state.maxSnoozes,
+      vibrate: state.vibrate,
+      challenge: state.challenge,
+      challengeNumbers: state.challengeNumbers
+    };
+  }
+
   function openEditor(id) {
     var isNew = id < 0;
     if (isNew && state.alarms.length >= MAX_ALARMS) {
@@ -712,17 +998,19 @@
     }
     editing = true;
     editingId = isNew ? nextId() : id;
-    var a = isNew
-      ? { id: editingId, enabled: true, hour: 7, minute: 30, repeat: true, days: ALL_DAYS, label: '' }
-      : alarmById(id);
-    if (!a) { editing = false; return; }
-
+    var a = isNew ? null : alarmById(id);
+    if (!isNew && !a) { editing = false; return; }
     if (isNew) {
       /* Новому будильнику подсказываем время: через 8 часов от текущего или 07:30. */
       var suggest = new Date(Date.now() + 8 * 3600 * 1000);
-      a.hour = suggest.getHours();
-      a.minute = suggest.getMinutes();
+      a = { id: editingId, enabled: true, hour: suggest.getHours(), minute: suggest.getMinutes(),
+            repeat: true, days: ALL_DAYS, label: '' };
+      var def = defaultAlarmSettings();
+      for (var dk in def) { if (def.hasOwnProperty(dk)) a[dk] = def[dk]; }
     }
+    /* Рабочая копия: изменения уходят в будильник только по кнопке «Готово» */
+    editAlarm = {};
+    for (var ek in a) { if (a.hasOwnProperty(ek)) editAlarm[ek] = a[ek]; }
 
     alarmTitle.textContent = isNew ? 'Новый будильник' : 'Будильник';
     timeInput.value = formatHM(a.hour, a.minute);
@@ -730,6 +1018,17 @@
     updateDaysRow(a.days);
     labelInput.value = a.label || '';
     deleteAlarmBtn.hidden = isNew;
+
+    /* Персональные настройки этого будильника */
+    updateEditorSound();
+    var evr = $('eVolumeRange');
+    evr.value = editAlarm.volume;
+    $('eVolumeValue').textContent = editAlarm.volume ? editAlarm.volume + '%' : 'Как в системе';
+    renderEditorChips();
+    $('eVibrateSwitch').setAttribute('aria-checked', editAlarm.vibrate ? 'true' : 'false');
+    $('eChallengeSwitch').setAttribute('aria-checked', editAlarm.challenge ? 'true' : 'false');
+    $('eChallengeNumbersSet').hidden = !editAlarm.challenge;
+
     openSheet(alarmOverlay);
   }
 
@@ -744,6 +1043,19 @@
 
   function editingRepeat() {
     return repeatSwitch.getAttribute('aria-checked') === 'true';
+  }
+
+  /* Подсветка выбранных чипов персональных настроек */
+  function renderEditorChips() {
+    if (!editAlarm) return;
+    var groups = alarmOverlay.querySelectorAll('.chips[data-ekey]');
+    for (var g = 0; g < groups.length; g++) {
+      var key = groups[g].getAttribute('data-ekey');
+      var chips = groups[g].querySelectorAll('.chip');
+      for (var i = 0; i < chips.length; i++) {
+        chips[i].classList.toggle('on', Number(chips[i].getAttribute('data-v')) === editAlarm[key]);
+      }
+    }
   }
 
   function editorAlarm() {
@@ -762,7 +1074,17 @@
       minute: isFinite(minute) ? clamp(minute, 0, 59) : 30,
       repeat: editingRepeat(),
       days: days || ALL_DAYS,
-      label: labelInput.value.slice(0, 24)
+      label: labelInput.value.slice(0, 24),
+      /* Персональные настройки — как отредактировано */
+      soundUri: editAlarm ? (editAlarm.soundUri || '') : '',
+      volume: editAlarm ? editAlarm.volume : state.volume,
+      fadeSeconds: editAlarm ? editAlarm.fadeSeconds : state.fadeSeconds,
+      autoStopMinutes: editAlarm ? editAlarm.autoStopMinutes : state.autoStopMinutes,
+      snoozeMinutes: editAlarm ? editAlarm.snoozeMinutes : state.snoozeMinutes,
+      maxSnoozes: editAlarm ? editAlarm.maxSnoozes : state.maxSnoozes,
+      vibrate: editAlarm ? editAlarm.vibrate : state.vibrate,
+      challenge: editAlarm ? editAlarm.challenge : state.challenge,
+      challengeNumbers: editAlarm ? editAlarm.challengeNumbers : state.challengeNumbers
     };
   }
 
@@ -794,19 +1116,55 @@
 
   deleteAlarmBtn.addEventListener('click', function () {
     if (!editing) return;
-    var idx = -1;
-    for (var i = 0; i < state.alarms.length; i++) {
-      if (state.alarms[i].id === editingId) { idx = i; break; }
+    removeAlarmById(editingId);
+  });
+
+  /* ————— Персональные настройки в редакторе ————— */
+  $('eSoundRow').addEventListener('click', function () {
+    picking = 'alarm';
+    openSheet(soundOverlay);
+  });
+
+  $('eVolumeRange').addEventListener('input', function () {
+    if (!editAlarm) return;
+    editAlarm.volume = clamp(parseInt(this.value, 10) || 0, 0, 100);
+    $('eVolumeValue').textContent = editAlarm.volume ? editAlarm.volume + '%' : 'Как в системе';
+  });
+
+  $('eVibrateSwitch').addEventListener('click', function () {
+    if (!editAlarm) return;
+    editAlarm.vibrate = !editAlarm.vibrate;
+    this.setAttribute('aria-checked', editAlarm.vibrate ? 'true' : 'false');
+  });
+
+  $('eChallengeSwitch').addEventListener('click', function () {
+    if (!editAlarm) return;
+    editAlarm.challenge = !editAlarm.challenge;
+    this.setAttribute('aria-checked', editAlarm.challenge ? 'true' : 'false');
+    $('eChallengeNumbersSet').hidden = !editAlarm.challenge;
+    toast(editAlarm.challenge ? 'Для отключения нужно решить пример' : 'Пример для отключения выключен');
+  });
+
+  var eChips = alarmOverlay.querySelectorAll('.chips[data-ekey]');
+  for (var eg = 0; eg < eChips.length; eg++) {
+    eChips[eg].addEventListener('click', function (event) {
+      if (!editAlarm) return;
+      var chip = event.target.closest ? event.target.closest('.chip') : null;
+      if (!chip) return;
+      var key = event.currentTarget.getAttribute('data-ekey');
+      editAlarm[key] = Number(chip.getAttribute('data-v'));
+      renderEditorChips();
+    });
+  }
+
+  $('eTestBtn').addEventListener('click', function () {
+    if (bridge && typeof bridge.testAlarm === 'function') {
+      /* Настоящий пробный звонок настройками этого будильника */
+      try { bridge.testAlarm(editingId); } catch (e) { toast('Не удалось запустить'); }
+    } else {
+      playPreview(editAlarm ? editAlarm.soundUri : '');
+      toast('Пробный звук');
     }
-    if (idx >= 0) {
-      state.alarms.splice(idx, 1);
-      saveState();
-      render();
-      pushState();
-      toast('Будильник удалён');
-    }
-    editing = false;
-    closeSheet(alarmOverlay);
   });
 
   repeatSwitch.addEventListener('click', function () {
@@ -917,7 +1275,7 @@
   });
 
   /* ————— Настройки в шторке ————— */
-  var chipGroups = moreOverlay.querySelectorAll('.chips');
+  var chipGroups = moreOverlay.querySelectorAll('.chips[data-key]');
   for (var g = 0; g < chipGroups.length; g++) {
     chipGroups[g].addEventListener('click', function (event) {
       var chip = event.target.closest ? event.target.closest('.chip') : null;
@@ -928,24 +1286,8 @@
       render();
       pushSettings();
       if (key === 'theme') applyTheme();
-      if (key === 'challenge') renderSettings();
     });
   }
-
-  $('vibrateSwitch').addEventListener('click', function () {
-    state.vibrate = !state.vibrate;
-    saveState();
-    render();
-    pushSettings();
-  });
-
-  $('challengeSwitch').addEventListener('click', function () {
-    state.challenge = !state.challenge;
-    saveState();
-    render();
-    pushSettings();
-    toast(state.challenge ? 'Для отключения нужно решить пример' : 'Пример для отключения выключен');
-  });
 
   /* ————— Обновления ————— */
   $('updateSwitch').addEventListener('click', function () {
@@ -1034,12 +1376,6 @@
     }
   };
 
-  $('volumeRange').addEventListener('input', function () {
-    state.volume = clamp(parseInt(this.value, 10) || 0, 0, 100);
-    $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
-  });
-  $('volumeRange').addEventListener('change', function () { saveState(); render(); pushSettings(); });
-
   /* ————— События ————— */
   createBtn.addEventListener('click', function () { openEditor(-1); });
 
@@ -1051,22 +1387,11 @@
 
   gearBtn.addEventListener('click', function () { openSheet(moreOverlay); });
 
-  $('soundRow').addEventListener('click', function () { openSheet(soundOverlay); });
-
   $('addFileBtn').addEventListener('click', function () {
     if (bridge && typeof bridge.pickSoundFile === 'function') {
       try { bridge.pickSoundFile(); } catch (e) { toast('Не удалось открыть выбор файла'); }
     } else {
       toast('Выбор файла доступен в приложении');
-    }
-  });
-
-  $('testBtn').addEventListener('click', function () {
-    if (bridge && typeof bridge.testAlarm === 'function') {
-      try { bridge.testAlarm(); } catch (e) { toast('Не удалось запустить'); }
-    } else {
-      playPreview(state.soundUri || '');
-      toast('Пробный звук');
     }
   });
 

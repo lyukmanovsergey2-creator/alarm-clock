@@ -44,7 +44,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             }
 
             boolean repeat = prefs.getBoolean(AlarmScheduler.key(id, "repeat"), true);
-            String sound = prefs.getString("soundUri", "");
+            String sound = AlarmScheduler.alarmSoundUri(prefs, id);
             String label = prefs.getString(AlarmScheduler.key(id, "label"), "");
             AlarmScheduler.logLine(context, "ALARM " + id + " СРАБОТАЛ ("
                     + (label.isEmpty() ? "без названия" : label)
@@ -75,8 +75,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             }
         } else if (AlarmScheduler.ACTION_SNOOZE.equals(action)) {
             int id = intent.getIntExtra(AlarmScheduler.EXTRA_ALARM_ID, 0);
-            String sound = prefs.getString(AlarmScheduler.key(id, "snoozeSound"),
-                    prefs.getString("soundUri", ""));
+            String sound = AlarmScheduler.alarmSoundUri(prefs, id);
             AlarmScheduler.logLine(context, "SNOOZE " + id + " сработал");
             prefs.edit().putLong(AlarmScheduler.key(id, "snoozeAt"), 0).apply();
             try {

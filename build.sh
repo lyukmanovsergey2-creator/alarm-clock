@@ -9,9 +9,9 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 SRC="$ROOT/app/src/main"
 BUILD="$ROOT/build"
 ANDROID_JAR="${ANDROID_JAR:-$HOME/android.jar}"
-DX="${DX:-$(command -v dx || echo /usr/lib/android-sdk/build-tools/debian/dx)}"
-VERSION_CODE="${VERSION_CODE:-11}"
-VERSION_NAME="${VERSION_NAME:-2.9}"
+DX="${DX:-$(command -v d8 || command -v dx || echo /home/opencode/bt34/d8)}"
+VERSION_CODE="${VERSION_CODE:-12}"
+VERSION_NAME="${VERSION_NAME:-2.10}"
 OUT="${OUT:-$ROOT/AlarmClock.apk}"
 
 [ -f "$ANDROID_JAR" ] || { echo "Не найден android.jar: $ANDROID_JAR"; exit 1; }
@@ -32,7 +32,13 @@ javac -encoding UTF-8 -source 8 -target 8 -Xlint:-options \
   -bootclasspath "$ANDROID_JAR" -d "$BUILD/classes" @"$BUILD/sources.txt"
 
 echo "3/6 dx (classes.dex)..."
-"$DX" --dex --min-sdk-version=23 --output="$BUILD/classes.dex" "$BUILD/classes"
+if "$DX" --help 2>/dev/null | grep -q -- '--release'; then
+  # d8: принимает .class-файлы по одному
+  mapfile -t CLASSFILES < <(find "$BUILD/classes" -name '*.class')
+  "$DX" --release --lib "$ANDROID_JAR" --output "$BUILD" "${CLASSFILES[@]}"
+else
+  "$DX" --dex --min-sdk-version=23 --output="$BUILD/classes.dex" "$BUILD/classes"
+fi
 
 echo "4/6 добавляю dex в APK..."
 cp "$BUILD/base.apk" "$BUILD/unsigned.apk"

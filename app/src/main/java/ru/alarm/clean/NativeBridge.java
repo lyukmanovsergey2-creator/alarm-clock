@@ -109,6 +109,18 @@ public class NativeBridge {
                 a.put("triggerAt", prefs.getLong(AlarmScheduler.key(id, "triggerAt"), 0));
                 a.put("snoozeUntil", prefs.getLong(AlarmScheduler.key(id, "snoozeAt"), 0));
                 a.put("lastFiredAt", prefs.getLong(AlarmScheduler.key(id, "lastFiredAt"), 0));
+                /* Персональные настройки будильника (звук, громкость и т.д.).
+                   Фолбэк на общие значения сохранён для будильников,
+                   созданных до обновления. */
+                a.put("soundUri", AlarmScheduler.alarmSoundUri(prefs, id));
+                a.put("volume", AlarmScheduler.alarmVolume(prefs, id));
+                a.put("fadeSeconds", AlarmScheduler.alarmFadeSeconds(prefs, id));
+                a.put("autoStopMinutes", AlarmScheduler.alarmAutoStopMinutes(prefs, id));
+                a.put("snoozeMinutes", AlarmScheduler.alarmSnoozeMinutes(prefs, id));
+                a.put("maxSnoozes", AlarmScheduler.alarmMaxSnoozes(prefs, id));
+                a.put("vibrate", AlarmScheduler.alarmVibrate(prefs, id));
+                a.put("challenge", AlarmScheduler.alarmChallenge(prefs, id));
+                a.put("challengeNumbers", AlarmScheduler.alarmChallengeNumbers(prefs, id));
                 alarms.put(a);
             }
             object.put("alarms", alarms);
@@ -178,6 +190,44 @@ public class NativeBridge {
                     editor.putInt(AlarmScheduler.key(id, "days"), days);
                     editor.putString(AlarmScheduler.key(id, "label"), label);
                     editor.putLong(AlarmScheduler.key(id, "skipBefore"), skipBefore);
+                    /* Персональные настройки будильника. На перерасчёт времени
+                       не влияют — ключ «changed» их не учитывает. */
+                    if (item.has("soundUri")) {
+                        editor.putString(AlarmScheduler.key(id, "soundUri"),
+                                item.optString("soundUri", ""));
+                    }
+                    if (item.has("volume")) {
+                        editor.putInt(AlarmScheduler.key(id, "volume"),
+                                clampInt(item.optInt("volume", 0), 0, 100));
+                    }
+                    if (item.has("fadeSeconds")) {
+                        editor.putInt(AlarmScheduler.key(id, "fadeSeconds"),
+                                clampInt(item.optInt("fadeSeconds", 0), 0, 300));
+                    }
+                    if (item.has("autoStopMinutes")) {
+                        editor.putInt(AlarmScheduler.key(id, "autoStopMinutes"),
+                                clampInt(item.optInt("autoStopMinutes", 10), 0, 120));
+                    }
+                    if (item.has("snoozeMinutes")) {
+                        editor.putInt(AlarmScheduler.key(id, "snoozeMinutes"),
+                                clampInt(item.optInt("snoozeMinutes", 10), 1, 120));
+                    }
+                    if (item.has("maxSnoozes")) {
+                        editor.putInt(AlarmScheduler.key(id, "maxSnoozes"),
+                                clampInt(item.optInt("maxSnoozes", 0), 0, 20));
+                    }
+                    if (item.has("vibrate")) {
+                        editor.putBoolean(AlarmScheduler.key(id, "vibrate"),
+                                item.optBoolean("vibrate", true));
+                    }
+                    if (item.has("challenge")) {
+                        editor.putBoolean(AlarmScheduler.key(id, "challenge"),
+                                item.optBoolean("challenge", false));
+                    }
+                    if (item.has("challengeNumbers")) {
+                        editor.putInt(AlarmScheduler.key(id, "challengeNumbers"),
+                                clampInt(item.optInt("challengeNumbers", 2), 2, 3));
+                    }
                     if (changed) {
                         editor.putLong(AlarmScheduler.key(id, "triggerAt"), 0);
                     }
@@ -269,6 +319,11 @@ public class NativeBridge {
     public void snooze(int minutes, String soundUri) {
         int id = AlarmService.currentAlarmId;
         if (!AlarmService.running || id < 0) {
+            return;
+        }
+        if (AlarmService.testing) {
+            /* Пробный звонок откладывать нельзя — только остановить. */
+            AlarmService.stop(activity);
             return;
         }
         int safeMinutes = Math.max(1, Math.min(120, minutes));
@@ -442,13 +497,22 @@ public class NativeBridge {
     }
 
     /* ————— Проверка и тест ————— */
+
+    /** Пробный звонок НАСТРОЙКАМИ конкретного будильника (звук, громкость и т.д.). */
     @JavascriptInterface
-    public void testAlarm() {
+    public void testAlarm(final int alarmId) {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
-                AlarmService.start(activity,
-                        AlarmScheduler.prefs(activity).getString("soundUri", ""), true, -1);
+                try {
+                    SharedPreferences prefs = AlarmScheduler.prefs(activity);
+                    int id = alarmId >= 0 ? alarmId : -1;
+                    AlarmService.start(activity,
+                            id >= 0 ? AlarmScheduler.alarmSoundUri(prefs, id)
+                                    : prefs.getString("soundUri", ""),
+                            true, id);
+                } catch (Exception ignored) {
+                }
             }
         });
     }

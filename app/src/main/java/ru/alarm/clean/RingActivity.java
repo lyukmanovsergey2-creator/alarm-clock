@@ -198,8 +198,8 @@ public class RingActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         SharedPreferences cfg = AlarmScheduler.prefs(this);
-        int minutes = Math.max(1, Math.min(120, cfg.getInt("snoozeMinutes", 10)));
-        int max = cfg.getInt("maxSnoozes", 0);
+        int minutes = Math.max(1, Math.min(120, AlarmScheduler.alarmSnoozeMinutes(cfg, alarmId)));
+        int max = AlarmScheduler.alarmMaxSnoozes(cfg, alarmId);
         int left = max - cfg.getInt(AlarmScheduler.key(alarmId, "snoozeCount"), 0);
         boolean limited = max > 0 && !AlarmService.testing;
         boolean snoozeAllowed = !limited || left > 0;
@@ -310,8 +310,8 @@ public class RingActivity extends Activity {
     private void newProblem() {
         int terms = 2;
         try {
-            terms = Math.max(2, Math.min(3,
-                    AlarmScheduler.prefs(this).getInt("challengeNumbers", 2)));
+            terms = Math.max(2, Math.min(3, AlarmScheduler
+                    .alarmChallengeNumbers(AlarmScheduler.prefs(this), alarmId)));
         } catch (Exception ignored) {
         }
         String text;
@@ -497,7 +497,7 @@ public class RingActivity extends Activity {
     }
 
     private void disable() {
-        boolean challenge = AlarmScheduler.prefs(this).getBoolean("challenge", false)
+        boolean challenge = AlarmScheduler.alarmChallenge(AlarmScheduler.prefs(this), alarmId)
                 && !AlarmService.testing;
         if (challenge) {
             /* Сначала решаем пример (доказываем, что не спим), потом выбираем способ. */

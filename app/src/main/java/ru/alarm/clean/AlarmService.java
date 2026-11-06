@@ -96,18 +96,20 @@ public class AlarmService extends Service {
 
         if (ACTION_SNOOZE.equals(action)) {
             if (!testing && id >= 0) {
-                int max = prefs.getInt("maxSnoozes", 0);
+                int max = AlarmScheduler.alarmMaxSnoozes(prefs, id);
                 int count = prefs.getInt(AlarmScheduler.key(id, "snoozeCount"), 0);
                 if (max > 0 && count >= max) {
                     /* лимит исчерпан — продолжаем звонить */
                     return START_NOT_STICKY;
                 }
-                int minutes = Math.max(1, Math.min(120, prefs.getInt("snoozeMinutes", 10)));
+                int minutes = Math.max(1, Math.min(120,
+                        AlarmScheduler.alarmSnoozeMinutes(prefs, id)));
                 long snoozeAt = System.currentTimeMillis() + minutes * 60000L;
                 AlarmScheduler.scheduleSnooze(this, id, snoozeAt);
                 prefs.edit()
                         .putInt(AlarmScheduler.key(id, "snoozeCount"), count + 1)
-                        .putString(AlarmScheduler.key(id, "snoozeSound"), prefs.getString("soundUri", ""))
+                        .putString(AlarmScheduler.key(id, "snoozeSound"),
+                                AlarmScheduler.alarmSoundUri(prefs, id))
                         .apply();
             }
             stopRinging();
@@ -143,17 +145,18 @@ public class AlarmService extends Service {
             startForeground(NOTIFICATION_ID, notification);
         }
 
-        SharedPreferences cfg = prefs;
-        applyAlarmVolume(cfg.getInt("volume", 0));
+        /* Громкость, нарастание, вибрация и автоостановка — настройки
+           звонящего будильника (с фолбэком на общие, если их ещё нет). */
+        applyAlarmVolume(AlarmScheduler.alarmVolume(prefs, id));
         playSound(soundUri);
-        startFadeIn(cfg.getInt("fadeSeconds", 0));
+        startFadeIn(AlarmScheduler.alarmFadeSeconds(prefs, id));
         wakeUp();
-        if (cfg.getBoolean("vibrate", true)) {
+        if (AlarmScheduler.alarmVibrate(prefs, id)) {
             startVibrating();
         }
         requestAudioFocus();
         launchRingActivity(soundUri, id);
-        scheduleAutoStop(cfg.getInt("autoStopMinutes", 10));
+        scheduleAutoStop(AlarmScheduler.alarmAutoStopMinutes(prefs, id));
 
         return START_NOT_STICKY;
     }
@@ -200,11 +203,12 @@ public class AlarmService extends Service {
 
         SharedPreferences cfg = AlarmScheduler.prefs(this);
         String label = id >= 0 ? cfg.getString(AlarmScheduler.key(id, "label"), "") : "";
-        int max = cfg.getInt("maxSnoozes", 0);
+        int max = AlarmScheduler.alarmMaxSnoozes(cfg, id);
         boolean canSnooze = testing || max <= 0
                 || (id >= 0 && cfg.getInt(AlarmScheduler.key(id, "snoozeCount"), 0) < max);
-        boolean challenge = cfg.getBoolean("challenge", false) && !testing;
-        int minutes = Math.max(1, Math.min(120, cfg.getInt("snoozeMinutes", 10)));
+        boolean challenge = id >= 0
+                && AlarmScheduler.alarmChallenge(cfg, id) && !testing;
+        int minutes = Math.max(1, Math.min(120, AlarmScheduler.alarmSnoozeMinutes(cfg, id)));
 
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= 26) {

@@ -693,10 +693,47 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 14px;
-    border: 0;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
     border-bottom: 1px solid rgba(255, 255, 255, .05);
+  }
+  .arow .rowdel {
+    /* Красная зона удаления под строкой: проявляется при свайпе влево */
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 62%;
+    min-width: 190px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: linear-gradient(90deg, #A8331F 0%, #D24739 55%, #E45448 100%);
+    color: #ffffff;
+    z-index: 0;
+  }
+  .rowdel svg { width: 22px; height: 22px; }
+  .rowdel .rowdeltext {
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .rowcontent {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    touch-action: pan-y;
     background: none;
+    border: 0;
     color: inherit;
     font: inherit;
     text-align: left;
@@ -704,6 +741,7 @@
   }
   .arow:last-child { border-bottom: 0; }
   .arow:active { background: rgba(255, 255, 255, .04); }
+  body.light .arow:active { background: rgba(20, 24, 12, .05); }
 
   .atime {
     font-size: 31px;
@@ -1049,7 +1087,7 @@
 
 <!-- Редактор будильника -->
 <div class="overlay" id="alarmOverlay" aria-hidden="true">
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="alarmTitle">
+  <div class="sheet tall" role="dialog" aria-modal="true" aria-labelledby="alarmTitle">
     <div class="grabber"></div>
     <div class="sheet-head">
       <h2 id="alarmTitle">Будильник</h2>
@@ -1081,6 +1119,102 @@
       <div class="set">
         <div class="set-head"><span class="set-title">Название</span></div>
         <input class="text-input" id="labelInput" type="text" maxlength="24" placeholder="Например, «Работа»" autocomplete="off">
+      </div>
+
+      <div class="group-title">Звук</div>
+      <div class="set">
+        <button class="setrow" id="eSoundRow" type="button">
+          <span class="labels">
+            <span class="set-title">Мелодия будильника</span>
+            <span class="set-hint" id="eSoundValue">По умолчанию</span>
+          </span>
+          <span class="chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+          </span>
+        </button>
+      </div>
+      <div class="set">
+        <div class="set-head">
+          <span class="set-title">Громкость</span>
+          <span class="set-value" id="eVolumeValue">Как в системе</span>
+        </div>
+        <input type="range" id="eVolumeRange" min="0" max="100" step="5" value="0" aria-label="Громкость будильника">
+        <div class="set-hint">Если задана, на время звонка меняет громкость будильника в системе, потом возвращает.</div>
+      </div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Нарастание громкости</span></div>
+        <div class="chips" data-ekey="fadeSeconds">
+          <button class="chip" type="button" data-v="0">Выкл</button>
+          <button class="chip" type="button" data-v="15">15 с</button>
+          <button class="chip" type="button" data-v="30">30 с</button>
+          <button class="chip" type="button" data-v="60">1 мин</button>
+        </div>
+      </div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Автоостановка</span></div>
+        <div class="chips" data-ekey="autoStopMinutes">
+          <button class="chip" type="button" data-v="1">1 мин</button>
+          <button class="chip" type="button" data-v="5">5 мин</button>
+          <button class="chip" type="button" data-v="10">10 мин</button>
+          <button class="chip" type="button" data-v="15">15 мин</button>
+          <button class="chip" type="button" data-v="30">30 мин</button>
+          <button class="chip" type="button" data-v="0">Никогда</button>
+        </div>
+        <div class="set-hint">Через это время звонок сам замолчит.</div>
+      </div>
+
+      <div class="group-title">Откладывание</div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Отложить на</span></div>
+        <div class="chips" data-ekey="snoozeMinutes">
+          <button class="chip" type="button" data-v="5">5 мин</button>
+          <button class="chip" type="button" data-v="10">10 мин</button>
+          <button class="chip" type="button" data-v="15">15 мин</button>
+          <button class="chip" type="button" data-v="20">20 мин</button>
+          <button class="chip" type="button" data-v="30">30 мин</button>
+        </div>
+      </div>
+      <div class="set">
+        <div class="set-head"><span class="set-title">Сколько раз можно откладывать</span></div>
+        <div class="chips" data-ekey="maxSnoozes">
+          <button class="chip" type="button" data-v="0">Без лимита</button>
+          <button class="chip" type="button" data-v="1">1</button>
+          <button class="chip" type="button" data-v="3">3</button>
+          <button class="chip" type="button" data-v="5">5</button>
+        </div>
+      </div>
+
+      <div class="group-title">Отключение</div>
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Вибрация</span>
+          <button class="switch" id="eVibrateSwitch" type="button" role="switch" aria-checked="true" aria-label="Вибрация"><span></span></button>
+        </div>
+      </div>
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Решить пример</span>
+          <button class="switch" id="eChallengeSwitch" type="button" role="switch" aria-checked="false" aria-label="Решить пример для отключения"><span></span></button>
+        </div>
+        <div class="set-hint">Чтобы отключить этот будильник, сначала решите пример. Помогает окончательно проснуться.</div>
+      </div>
+      <div class="set" id="eChallengeNumbersSet" hidden>
+        <div class="set-head nomargin">
+          <span class="set-title">Чисел в примере</span>
+          <div class="chips" data-ekey="challengeNumbers">
+            <button class="chip" type="button" data-v="2">Два</button>
+            <button class="chip" type="button" data-v="3">Три</button>
+          </div>
+        </div>
+        <div class="set-hint">Три числа — чуть сложнее: «12 + 7 − 4» или «3 × 4 + 6». Всё по силам в уме.</div>
+      </div>
+
+      <div class="group-title">Действия</div>
+      <div class="set">
+        <button class="btn-sm" id="eTestBtn" type="button">Проверить звонок</button>
+        <div class="set-hint">Пробный звонок настройками этого будильника: звук, громкость, нарастание. Расписание не меняет.</div>
       </div>
     </div>
     <div class="sheet-actions">
@@ -1131,102 +1265,6 @@
           </div>
         </div>
         <div class="set-hint">Тема применяется и к экрану звонка.</div>
-      </div>
-
-      <div class="group-title">Звук</div>
-      <div class="set">
-        <button class="setrow" id="soundRow" type="button">
-          <span class="labels">
-            <span class="set-title">Звук будильника</span>
-            <span class="set-hint" id="soundValue">По умолчанию</span>
-          </span>
-          <span class="chev" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M9 6l6 6-6 6"/>
-            </svg>
-          </span>
-        </button>
-      </div>
-      <div class="set">
-        <div class="set-head">
-          <span class="set-title">Громкость</span>
-          <span class="set-value" id="volumeValue">Как в системе</span>
-        </div>
-        <input type="range" id="volumeRange" min="0" max="100" step="5" value="0" aria-label="Громкость будильника">
-        <div class="set-hint">Если задана, на время звонка меняет громкость будильника в системе, потом возвращает.</div>
-      </div>
-      <div class="set">
-        <div class="set-head"><span class="set-title">Нарастание громкости</span></div>
-        <div class="chips" data-key="fadeSeconds">
-          <button class="chip" type="button" data-v="0">Выкл</button>
-          <button class="chip" type="button" data-v="15">15 с</button>
-          <button class="chip" type="button" data-v="30">30 с</button>
-          <button class="chip" type="button" data-v="60">1 мин</button>
-        </div>
-      </div>
-      <div class="set">
-        <div class="set-head"><span class="set-title">Автоостановка</span></div>
-        <div class="chips" data-key="autoStopMinutes">
-          <button class="chip" type="button" data-v="1">1 мин</button>
-          <button class="chip" type="button" data-v="5">5 мин</button>
-          <button class="chip" type="button" data-v="10">10 мин</button>
-          <button class="chip" type="button" data-v="15">15 мин</button>
-          <button class="chip" type="button" data-v="30">30 мин</button>
-          <button class="chip" type="button" data-v="0">Никогда</button>
-        </div>
-        <div class="set-hint">Через это время звонок сам замолчит.</div>
-      </div>
-
-      <div class="group-title">Откладывание</div>
-      <div class="set">
-        <div class="set-head"><span class="set-title">Отложить на</span></div>
-        <div class="chips" data-key="snoozeMinutes">
-          <button class="chip" type="button" data-v="5">5 мин</button>
-          <button class="chip" type="button" data-v="10">10 мин</button>
-          <button class="chip" type="button" data-v="15">15 мин</button>
-          <button class="chip" type="button" data-v="20">20 мин</button>
-          <button class="chip" type="button" data-v="30">30 мин</button>
-        </div>
-      </div>
-      <div class="set">
-        <div class="set-head"><span class="set-title">Сколько раз можно откладывать</span></div>
-        <div class="chips" data-key="maxSnoozes">
-          <button class="chip" type="button" data-v="0">Без лимита</button>
-          <button class="chip" type="button" data-v="1">1</button>
-          <button class="chip" type="button" data-v="3">3</button>
-          <button class="chip" type="button" data-v="5">5</button>
-        </div>
-      </div>
-
-      <div class="group-title">Отключение</div>
-      <div class="set">
-        <div class="set-head nomargin">
-          <span class="set-title">Вибрация</span>
-          <button class="switch" id="vibrateSwitch" type="button" role="switch" aria-checked="true" aria-label="Вибрация"><span></span></button>
-        </div>
-      </div>
-      <div class="set">
-        <div class="set-head nomargin">
-          <span class="set-title">Решить пример</span>
-          <button class="switch" id="challengeSwitch" type="button" role="switch" aria-checked="false" aria-label="Решить пример для отключения"><span></span></button>
-        </div>
-        <div class="set-hint">Чтобы отключить будильник, сначала решите пример — потом выберите «на сутки или совсем». Помогает окончательно проснуться.</div>
-      </div>
-      <div class="set" id="challengeNumbersSet" hidden>
-        <div class="set-head nomargin">
-          <span class="set-title">Чисел в примере</span>
-          <div class="chips" data-key="challengeNumbers">
-            <button class="chip" type="button" data-v="2">Два</button>
-            <button class="chip" type="button" data-v="3">Три</button>
-          </div>
-        </div>
-        <div class="set-hint">Три числа — чуть сложнее: «12 + 7 − 4» или «3 × 4 + 6». Всё по силам в уме.</div>
-      </div>
-
-      <div class="group-title">Действия</div>
-      <div class="set">
-        <button class="btn-sm" id="testBtn" type="button">Проверить звонок</button>
-        <div class="set-hint">Пробный звонок: проверьте звук и громкость. Расписание не меняет.</div>
       </div>
 
       <div class="group-title">Обновления</div>

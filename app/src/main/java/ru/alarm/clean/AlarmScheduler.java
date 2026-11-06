@@ -187,6 +187,48 @@ final class AlarmScheduler {
 
     /* ————— Расчёт времени ————— */
 
+    /* ————— Настройки отдельных будильников (с фолбэком на общие) ————— */
+    /* Звук, громкость, нарастание, автоостановка, откладывание, вибрация
+       и «пример для отключения» теперь у каждого будильника свои. Если их
+       ещё нет (обновление со старой версии) — используются прежние общие
+       значения, поэтому настройки существующих будильников поменялись. */
+
+    static String alarmSoundUri(SharedPreferences prefs, int id) {
+        return prefs.getString(key(id, "soundUri"), prefs.getString("soundUri", ""));
+    }
+
+    static int alarmVolume(SharedPreferences prefs, int id) {
+        return prefs.getInt(key(id, "volume"), prefs.getInt("volume", 0));
+    }
+
+    static int alarmFadeSeconds(SharedPreferences prefs, int id) {
+        return prefs.getInt(key(id, "fadeSeconds"), prefs.getInt("fadeSeconds", 0));
+    }
+
+    static int alarmAutoStopMinutes(SharedPreferences prefs, int id) {
+        return prefs.getInt(key(id, "autoStopMinutes"), prefs.getInt("autoStopMinutes", 10));
+    }
+
+    static int alarmSnoozeMinutes(SharedPreferences prefs, int id) {
+        return prefs.getInt(key(id, "snoozeMinutes"), prefs.getInt("snoozeMinutes", 10));
+    }
+
+    static int alarmMaxSnoozes(SharedPreferences prefs, int id) {
+        return prefs.getInt(key(id, "maxSnoozes"), prefs.getInt("maxSnoozes", 0));
+    }
+
+    static boolean alarmVibrate(SharedPreferences prefs, int id) {
+        return prefs.getBoolean(key(id, "vibrate"), prefs.getBoolean("vibrate", true));
+    }
+
+    static boolean alarmChallenge(SharedPreferences prefs, int id) {
+        return prefs.getBoolean(key(id, "challenge"), prefs.getBoolean("challenge", false));
+    }
+
+    static int alarmChallengeNumbers(SharedPreferences prefs, int id) {
+        return prefs.getInt(key(id, "challengeNumbers"), prefs.getInt("challengeNumbers", 2));
+    }
+
     private static boolean alarmRepeat(SharedPreferences prefs, int id) {
         return prefs.getBoolean(key(id, "repeat"), true);
     }
@@ -313,7 +355,12 @@ final class AlarmScheduler {
                 .remove(key(id, "repeat")).remove(key(id, "days")).remove(key(id, "label"))
                 .remove(key(id, "triggerAt")).remove(key(id, "skipBefore"))
                 .remove(key(id, "snoozeAt")).remove(key(id, "snoozeSound"))
-                .remove(key(id, "snoozeCount")).remove(key(id, "lastFiredAt"));
+                .remove(key(id, "snoozeCount")).remove(key(id, "lastFiredAt"))
+                .remove(key(id, "soundUri")).remove(key(id, "volume"))
+                .remove(key(id, "fadeSeconds")).remove(key(id, "autoStopMinutes"))
+                .remove(key(id, "snoozeMinutes")).remove(key(id, "maxSnoozes"))
+                .remove(key(id, "vibrate")).remove(key(id, "challenge"))
+                .remove(key(id, "challengeNumbers"));
         java.util.List<Integer> ids = alarmIdList(prefs);
         ids.remove(Integer.valueOf(id));
         writeAlarmIds(editor, ids);
@@ -428,7 +475,7 @@ final class AlarmScheduler {
 
     private static void fireMissed(Context context, int id, SharedPreferences prefs) {
         try {
-            AlarmService.start(context, prefs.getString("soundUri", ""), false, id);
+            AlarmService.start(context, alarmSoundUri(prefs, id), false, id);
         } catch (Exception exception) {
             log(context, "дозвон не удался: " + exception);
         }
