@@ -1216,6 +1216,19 @@
         <div class="set-hint">Пробный звонок: проверьте звук и громкость. Расписание не меняет.</div>
       </div>
 
+      <div class="group-title">Обновления</div>
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Проверять новые версии</span>
+          <button class="switch" id="updateSwitch" type="button" role="switch" aria-checked="false" aria-label="Проверка обновлений"><span></span></button>
+        </div>
+        <div class="set-hint">Раз в сутки проверяется, вышла ли новая версия. Во время звонка проверка молчит и будильники не затрагивает.</div>
+      </div>
+      <div class="set">
+        <button class="btn-sm" id="updateCheckBtn" type="button">Проверить сейчас</button>
+        <div class="set-hint">Разовая проверка: покажет, есть ли новая версия.</div>
+      </div>
+
       <div id="healthGroup">
         <div class="group-title">Надёжность</div>
         <div class="set" id="healthList"></div>
@@ -1232,6 +1245,42 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Согласие на доступ к интернету (проверка обновлений) -->
+<div class="overlay" id="permOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="permTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="permTitle">Доступ в интернет</h2>
+      <button class="close" type="button" data-close="perm" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="hint">Чтобы проверять наличие новой версии, приложению нужен доступ в интернет: раз в сутки выполняется один запрос к странице релизов (GitHub). Во время звонка проверка молчит, узнавшее расписание не трогает. Разрешение можно отозвать в любой момент — выключите «Проверять новые версии».</p>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" type="button" id="permDeny">Не разрешать</button>
+      <button class="btn btn-primary" type="button" id="permAllow">Разрешить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Доступна новая версия -->
+<div class="overlay" id="updateOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="updateTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="updateTitle">Новая версия</h2>
+      <button class="close" type="button" data-close="update" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="hint">Доступна версия <span id="updateVersion">—</span>. Обновление скачивается и открывается через системный установщик. Будильники, настройки и звук сохраняются.</p>
+    <div class="sheet-actions">
+      <button class="btn btn-ghost" type="button" id="updateLater">Позже</button>
+      <button class="btn btn-primary" type="button" id="updateNow">Обновить</button>
     </div>
   </div>
 </div>

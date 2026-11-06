@@ -225,6 +225,7 @@ public class NativeBridge {
             editor.putInt("challengeNumbers", clampInt(c.optInt("challengeNumbers", 2), 2, 3));
         if (c.has("maxSnoozes"))
             editor.putInt("maxSnoozes", clampInt(c.optInt("maxSnoozes", 0), 0, 20));
+        if (c.has("updateCheck")) editor.putBoolean("updateCheck", c.optBoolean("updateCheck", false));
     }
 
     private static int clampInt(int v, int min, int max) {
@@ -525,6 +526,51 @@ public class NativeBridge {
                 }
             }
         });
+    }
+
+    /* ————— Необязательная проверка обновлений ————— */
+
+    /** Ручная проверка «Проверить сейчас» (результат — всегда видимый). */
+    @JavascriptInterface
+    public void checkUpdateNow() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (AlarmService.running) {
+                        toast("Будильник звонит — проверка отложена");
+                        return;
+                    }
+                    UpdateChecker.checkNow(activity, true);
+                } catch (Exception e) {
+                    toast("Не удалось начать проверку");
+                }
+            }
+        });
+    }
+
+    /** Скачивание APK найденной версии и открытие установщика. */
+    @JavascriptInterface
+    public void downloadUpdate() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    UpdateChecker.download(activity);
+                } catch (Exception e) {
+                    toast("Не удалось начать скачивание");
+                }
+            }
+        });
+    }
+
+    /** Забывает найденное обновление (пользователь выключил проверку). */
+    @JavascriptInterface
+    public void discardUpdate() {
+        try {
+            UpdateChecker.clearPending(AlarmScheduler.prefs(activity));
+        } catch (Exception ignored) {
+        }
     }
 
     /* ————— Диагностика ————— */

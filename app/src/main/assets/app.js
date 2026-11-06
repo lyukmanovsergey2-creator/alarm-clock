@@ -22,6 +22,7 @@
     challenge: false,
     challengeNumbers: 2,
     theme: 0,
+    updateCheck: false,
     alarms: []   /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
   };
 
@@ -50,6 +51,8 @@
   var moreOverlay = $('moreOverlay');
   var disableOverlay = $('disableOverlay');
   var alarmOverlay = $('alarmOverlay');
+  var permOverlay = $('permOverlay');
+  var updateOverlay = $('updateOverlay');
   var timeInput = $('timeInput');
   var repeatSwitch = $('repeatSwitch');
   var daysRow = $('daysRow');
@@ -124,6 +127,7 @@
       result.challenge = !!s.challenge;
       result.challengeNumbers = clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 3);
       result.theme = num(s.theme, 0) === 1 ? 1 : 0;
+      result.updateCheck = !!s.updateCheck;
       if (Array.isArray(s.alarms)) {
         for (var a = 0; a < s.alarms.length && result.alarms.length < MAX_ALARMS; a++) {
           var al = normalizeAlarm(s.alarms[a]);
@@ -409,6 +413,7 @@
     }
     $('vibrateSwitch').setAttribute('aria-checked', state.vibrate ? 'true' : 'false');
     $('challengeSwitch').setAttribute('aria-checked', state.challenge ? 'true' : 'false');
+    $('updateSwitch').setAttribute('aria-checked', state.updateCheck ? 'true' : 'false');
     var challengeNumbers = $('challengeNumbersSet');
     if (challengeNumbers) challengeNumbers.hidden = !state.challenge;
     var vr = $('volumeRange');
@@ -428,7 +433,8 @@
       vibrate: state.vibrate,
       autoStopMinutes: state.autoStopMinutes,
       challenge: state.challenge,
-      challengeNumbers: state.challengeNumbers
+      challengeNumbers: state.challengeNumbers,
+      updateCheck: state.updateCheck
     };
   }
 
@@ -594,7 +600,8 @@
   function toast(message) {
     toastEl.textContent = message;
     var sheetOpen = moreOverlay.classList.contains('open') || soundOverlay.classList.contains('open')
-      || alarmOverlay.classList.contains('open') || disableOverlay.classList.contains('open');
+      || alarmOverlay.classList.contains('open') || disableOverlay.classList.contains('open')
+      || permOverlay.classList.contains('open') || updateOverlay.classList.contains('open');
     toastEl.classList.toggle('top', sheetOpen);
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
@@ -621,7 +628,7 @@
   }
 
   function closeTopSheet() {
-    var order = [moreOverlay, soundOverlay, alarmOverlay, disableOverlay];
+    var order = [updateOverlay, permOverlay, moreOverlay, soundOverlay, alarmOverlay, disableOverlay];
     for (var i = 0; i < order.length; i++) {
       if (order[i].classList.contains('open')) { closeSheet(order[i]); return true; }
     }
@@ -927,6 +934,102 @@
     toast(state.challenge ? 'Для отключения нужно решить пример' : 'Пример для отключения выключен');
   });
 
+  /* ————— Обновления ————— */
+  $('updateSwitch').addEventListener('click', function () {
+    if (state.updateCheck) {
+      state.updateCheck = false;
+      saveState();
+      render();
+      pushSettings();
+      if (bridge && typeof bridge.discardUpdate === 'function') {
+        try { bridge.discardUpdate(); } catch (e) { /* ignore */ }
+      }
+      toast('Проверка обновлений выключена');
+    } else {
+      /* Включаем только после явного согласия на доступ в интернет. */
+      openSheet(permOverlay);
+    }
+  });
+
+  $('permAllow').addEventListener('click', function () {
+    closeSheet(permOverlay);
+    state.updateCheck = true;
+    saveState();
+    render();
+    pushSettings();
+    toast('Проверка обновлений включена');
+    /* Сразу первая проверка — она же подтвердит, что всё работает. */
+    if (bridge && typeof bridge.checkUpdateNow === 'function') {
+      try { bridge.checkUpdateNow(); } catch (e) { /* ignore */ }
+    }
+  });
+
+  $('permDeny').addEventListener('click', function () {
+    closeSheet(permOverlay);
+    state.updateCheck = false;
+    saveState();
+    render();
+    pushSettings();
+    toast('Проверка останется выключенной');
+  });
+
+  $('updateCheckBtn').addEventListener('click', function () {
+    if (!state.updateCheck) {
+      /* Без согласия интернет не доступен — сначала спрашиваем. */
+      openSheet(permOverlay);
+      return;
+    }
+    if (bridge && typeof bridge.checkUpdateNow === 'function') {
+      toast('Проверяю…');
+      try { bridge.checkUpdateNow(); } catch (e) { toast('Не удалось начать проверку'); }
+    } else {
+      toast('Проверка доступна в приложении');
+    }
+  });
+
+  $('updateLater').addEventListener('click', function () {
+    closeSheet(updateOverlay);
+    toast('Предложим при следующей проверке');
+  });
+
+  $('updateNow').addEventListener('click', function () {
+    closeSheet(updateOverlay);
+    if (bridge && typeof bridge.downloadUpdate === 'function') {
+      try { bridge.downloadUpdate(); } catch (e) { toast('Не удалось начать скачивание'); }
+    } else {
+      toast('Обновление доступно в приложении');
+    }
+  });
+
+  /* Ответ нативной стороны: {available, version, manual, error} */
+  window.__onUpdateCheck = function (json) {
+    var data;
+    try { data = JSON.parse(json); } catch (e) { return; }
+    if (!data) return;
+    if (data.error) {
+      toast(data.manual ? 'Нет сети — проверьте подключение' : 'Проверка не удалась');
+      return;
+    }
+    if (ringingId >= 0) {
+      /* Будильник звонит — предложение покажется при следующей проверке. */
+      if (data.manual) toast('Новая версия ' + data.version + ' — не сейчас, звонит будильник');
+      return;
+    }
+    if (data.available) {
+      var v = $('updateVersion');
+      if (v) v.textContent = data.version || '—';
+      openSheet(updateOverlay);
+    } else if (data.manual) {
+      toast('У вас последняя версия');
+    }
+  };
+
+  /* Прогресс скачивания в процентах (приходит каждые 10%). */
+  window.__onUpdateProgress = function (pct) {
+    var n = parseInt(pct, 10);
+    if (isFinite(n) && n > 0 && n < 100) toast('Скачивание: ' + n + '%');
+  };
+
   $('volumeRange').addEventListener('input', function () {
     state.volume = clamp(parseInt(this.value, 10) || 0, 0, 100);
     $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
@@ -986,11 +1089,13 @@
       closeSheet(target === 'more' ? moreOverlay
         : target === 'disable' ? disableOverlay
         : target === 'alarm' ? alarmOverlay
+        : target === 'perm' ? permOverlay
+        : target === 'update' ? updateOverlay
         : soundOverlay);
     });
   }
 
-  [soundOverlay, moreOverlay, alarmOverlay, disableOverlay].forEach(function (overlay) {
+  [soundOverlay, moreOverlay, alarmOverlay, disableOverlay, permOverlay, updateOverlay].forEach(function (overlay) {
     overlay.addEventListener('click', function (event) {
       if (event.target === overlay) closeSheet(overlay);
     });

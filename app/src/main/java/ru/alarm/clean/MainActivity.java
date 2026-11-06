@@ -150,6 +150,13 @@ public class MainActivity extends Activity {
 
         applyThemeColors(AlarmScheduler.prefs(this).getBoolean("lightTheme", false));
 
+        /* Ежедневная фоновая проверка обновлений (если пользователь включил).
+           Молчит во время звонка и никогда не мешает расписанию будильников. */
+        try {
+            UpdateChecker.maybeCheck(this);
+        } catch (Exception ignored) {
+        }
+
         if (AlarmService.running) {
             /* Пока будильник звонит, главный экран недоступен: показываем экран звонка. */
             try {
