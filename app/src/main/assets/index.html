@@ -172,12 +172,15 @@
   .settings {
     min-height: 0;
     display: flex;
-    align-items: center;
+    align-items: stretch;   /* карточка списка занимает всю треть */
     padding: 0 20px;
   }
 
   .card {
     width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--line);
     border-radius: 26px;
     background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .025));
@@ -650,7 +653,7 @@
 
   /* ————— Список будильников (средняя треть) ————— */
   .alist {
-    max-height: calc(33.333vh - 36px);
+    flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -662,9 +665,20 @@
     font-size: 13px;
     color: var(--dim);
     text-align: center;
-    display: none;
   }
-  #emptyHint:not([hidden]) { display: block; }
+
+  /* Порядковый номер будильника в строке списка */
+  .anum {
+    flex: 0 0 auto;
+    min-width: 22px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--dim);
+    font-variant-numeric: tabular-nums;
+    align-self: center;
+  }
+  .arow.on .anum { color: var(--muted); }
 
   .alabel.dim { color: var(--dim); }
 
@@ -972,7 +986,7 @@
   <section class="settings">
     <div class="card" id="card">
       <div class="alist" id="alarmList"></div>
-      <div class="alist-empty" id="emptyHint">Нажмите «+», чтобы создать будильник</div>
+      <div class="alist-empty" id="emptyHint" hidden>Будильников ещё нет — создайте кнопкой ниже</div>
     </div>
   </section>
 

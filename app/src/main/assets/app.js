@@ -234,6 +234,14 @@
     return 'минут';
   }
 
+  function alarmsWord(n) {
+    var m100 = n % 100, m10 = n % 10;
+    if (m100 >= 11 && m100 <= 14) return 'будильников';
+    if (m10 === 1) return 'будильник';
+    if (m10 >= 2 && m10 <= 4) return 'будильника';
+    return 'будильников';
+  }
+
   /* Ближайший включённый будильник (время, время срабатывания). */
   function nearestEnabled() {
     var best = null, bestTs = 0;
@@ -285,7 +293,7 @@
     } else if (enabledCount === 1) {
       statusText.textContent = '1 будильник включён';
     } else {
-      statusText.textContent = enabledCount + ' будильника включено';
+      statusText.textContent = enabledCount + ' ' + alarmsWord(enabledCount) + ' включено';
     }
 
     /* Верхние часы: ближайший включённый будильник */
@@ -341,14 +349,20 @@
     alarmList.innerHTML = '';
     emptyHint.hidden = state.alarms.length > 0;
     for (var i = 0; i < state.alarms.length; i++) {
-      alarmList.appendChild(buildAlarmRow(state.alarms[i]));
+      alarmList.appendChild(buildAlarmRow(state.alarms[i], i + 1));
     }
   }
 
-  function buildAlarmRow(a) {
+  function buildAlarmRow(a, number) {
     var row = document.createElement('div');
     row.className = 'arow' + (a.enabled ? ' on' : '');
     row.setAttribute('data-id', String(a.id));
+
+    /* Порядковый номер в перечне */
+    var num = document.createElement('span');
+    num.className = 'anum';
+    num.textContent = number;
+    row.appendChild(num);
 
     var time = document.createElement('span');
     time.className = 'atime';
