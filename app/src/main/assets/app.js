@@ -1,22 +1,18 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'cleanAlarm.state.v1';
+  var STORAGE_KEY = 'cleanAlarm.state.v2';
+  var OLD_STORAGE_KEY = 'cleanAlarm.state.v1';
   var DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
   var ALL_DAYS = 127;
   var WEEKDAYS = 31;   /* пн–пт */
   var WEEKEND = 96;    /* сб, вс */
+  var MAX_ALARMS = 15;
 
   var DEFAULT_STATE = {
-    hour: 7,
-    minute: 30,
-    enabled: false,
-    repeat: true,
-    days: ALL_DAYS,
     soundUri: '',
     soundTitle: 'По умолчанию',
     customSounds: [],
-    label: '',
     snoozeMinutes: 10,
     maxSnoozes: 0,
     fadeSeconds: 0,
@@ -26,36 +22,41 @@
     challenge: false,
     challengeNumbers: 2,
     theme: 0,
-    snoozeUntil: 0,
-    skipBefore: 0,
-    savedAt: 0
+    alarms: []   /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
   };
 
   var $ = function (id) { return document.getElementById(id); };
   var app = $('app');
   var card = $('card');
   var timeBtn = $('timeBtn');
-  var powerBtn = $('powerBtn');
   var gearBtn = $('gearBtn');
+  var addBtn = $('addBtn');
   var statusText = $('statusText');
-  var nowText = $('nowText');
   var nextText = $('nextText');
+  var nowText = $('nowText');
+  var metaMid = $('metaMid');
   var soundValue = $('soundValue');
-  var repeatValue = $('repeatValue');
-  var repeatSwitch = $('repeatSwitch');
+  var alarmList = $('alarmList');
+  var emptyHint = $('emptyHint');
   var snoozeBtn = $('snoozeBtn');
   var snoozeSub = $('snoozeSub');
   var disableBtn = $('disableBtn');
+  var createBtn = $('createBtn');
+  var createSub = $('createSub');
   var toastEl = $('toast');
-  var daysRow = $('daysRow');
 
-  var timeOverlay = $('timeOverlay');
-  var timeInput = $('timeInput');
-  var timeSave = $('timeSave');
   var soundOverlay = $('soundOverlay');
   var soundList = $('soundList');
   var moreOverlay = $('moreOverlay');
   var disableOverlay = $('disableOverlay');
+  var alarmOverlay = $('alarmOverlay');
+  var timeInput = $('timeInput');
+  var repeatSwitch = $('repeatSwitch');
+  var daysRow = $('daysRow');
+  var labelInput = $('labelInput');
+  var alarmSaveBtn = $('alarmSave');
+  var deleteAlarmBtn = $('deleteAlarmBtn');
+  var alarmTitle = $('alarmTitle');
 
   var bridge = window.NativeAlarm || null;
   var state = loadState();
@@ -63,37 +64,47 @@
   var previewTimer = 0;
   var audioCtx = null;
   var toastTimer = 0;
+  /* Редактируемый будильник: true — показывается шторка редактора. */
+  var editing = false;
+  var editingId = -1;
+  var ringingId = -1;
 
   /* ————— Утилиты ————— */
   function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function formatHM(h, m) { return pad(h) + ':' + pad(m); }
-  function formatDateHM(ts) { var d = new Date(ts); return formatHM(d.getHours(), d.getMinutes()); }
-  function snoozeActive() { return state.snoozeUntil > Date.now(); }
   function num(v, def) { v = Number(v); return isFinite(v) ? v : def; }
+  function alarmById(id) {
+    for (var i = 0; i < state.alarms.length; i++) {
+      if (state.alarms[i].id === id) return state.alarms[i];
+    }
+    return null;
+  }
 
-  /* ————— Состояние (localStorage) ————— */
+  /* ————— Состояние (localStorage: только общие настройки; список — нативный) ————— */
   function loadState() {
-    var result = {};
+    var result = { alarms: [] };
     var key;
     for (key in DEFAULT_STATE) {
-      if (Object.prototype.hasOwnProperty.call(DEFAULT_STATE, key)) {
+      if (key !== 'alarms' && Object.prototype.hasOwnProperty.call(DEFAULT_STATE, key)) {
         result[key] = DEFAULT_STATE[key];
       }
     }
     result.customSounds = [];
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return result;
+      if (!raw) {
+        /* Первый запуск после обновления: переносим старые настройки (v1). */
+        raw = localStorage.getItem(OLD_STORAGE_KEY);
+        if (!raw) return result;
+        var oldJson = JSON.parse(raw);
+        if (!oldJson || typeof oldJson !== 'object') return result;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrateOld(oldJson)));
+        raw = localStorage.getItem(STORAGE_KEY);
+      }
       var s = JSON.parse(raw);
       if (!s || typeof s !== 'object') return result;
 
-      result.hour = clamp(parseInt(num(s.hour, 7), 10), 0, 23);
-      result.minute = clamp(parseInt(num(s.minute, 30), 10), 0, 59);
-      result.enabled = !!s.enabled;
-      result.repeat = s.repeat !== false;
-      var days = parseInt(num(s.days, ALL_DAYS), 10) & ALL_DAYS;
-      result.days = days || ALL_DAYS;
       result.soundUri = typeof s.soundUri === 'string' ? s.soundUri : '';
       result.soundTitle = typeof s.soundTitle === 'string' && s.soundTitle ? s.soundTitle : 'По умолчанию';
       if (Array.isArray(s.customSounds)) {
@@ -104,7 +115,6 @@
           }
         }
       }
-      result.label = typeof s.label === 'string' ? s.label.slice(0, 24) : '';
       result.snoozeMinutes = clamp(parseInt(num(s.snoozeMinutes, 10), 10), 1, 120);
       result.maxSnoozes = clamp(parseInt(num(s.maxSnoozes, 0), 10), 0, 20);
       result.fadeSeconds = clamp(parseInt(num(s.fadeSeconds, 0), 10), 0, 300);
@@ -114,40 +124,87 @@
       result.challenge = !!s.challenge;
       result.challengeNumbers = clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 3);
       result.theme = num(s.theme, 0) === 1 ? 1 : 0;
-      result.snoozeUntil = Math.max(0, num(s.snoozeUntil, 0));
-      result.skipBefore = Math.max(0, num(s.skipBefore, 0));
-      result.savedAt = num(s.savedAt, 0);
+      if (Array.isArray(s.alarms)) {
+        for (var a = 0; a < s.alarms.length && result.alarms.length < MAX_ALARMS; a++) {
+          var al = normalizeAlarm(s.alarms[a]);
+          if (al) result.alarms.push(al);
+        }
+      }
     } catch (e) {
       /* повреждённые данные — значения по умолчанию */
     }
     return result;
   }
 
+  /** Старое состояние (один будильник) — в новый формат общих настроек. */
+  function migrateOld(s) {
+    var m = {
+      soundUri: typeof s.soundUri === 'string' ? s.soundUri : '',
+      soundTitle: typeof s.soundTitle === 'string' && s.soundTitle ? s.soundTitle : 'По умолчанию',
+      customSounds: Array.isArray(s.customSounds) ? s.customSounds.slice(0, 8) : [],
+      snoozeMinutes: clamp(parseInt(num(s.snoozeMinutes, 10), 10), 1, 120),
+      maxSnoozes: clamp(parseInt(num(s.maxSnoozes, 0), 10), 0, 20),
+      fadeSeconds: clamp(parseInt(num(s.fadeSeconds, 0), 10), 0, 300),
+      volume: clamp(parseInt(num(s.volume, 0), 10), 0, 100),
+      vibrate: s.vibrate !== false,
+      autoStopMinutes: clamp(parseInt(num(s.autoStopMinutes, 10), 10), 0, 120),
+      challenge: !!s.challenge,
+      challengeNumbers: clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 3),
+      theme: num(s.theme, 0) === 1 ? 1 : 0,
+      alarms: []
+    };
+    /* Старый будильник мигрирует как id 1 — нативная сторона делает то же самое. */
+    m.alarms = [{
+      id: 1,
+      enabled: !!s.enabled,
+      hour: clamp(parseInt(num(s.hour, 7), 10), 0, 23),
+      minute: clamp(parseInt(num(s.minute, 30), 10), 0, 59),
+      repeat: s.repeat !== false,
+      days: (parseInt(num(s.days, ALL_DAYS), 10) & ALL_DAYS) || ALL_DAYS,
+      label: typeof s.label === 'string' ? s.label.slice(0, 24) : ''
+    }];
+    return m;
+  }
+
+  function normalizeAlarm(a) {
+    if (!a || typeof a !== 'object') return null;
+    var id = parseInt(num(a.id, -1), 10);
+    if (!(id >= 0)) return null;
+    return {
+      id: id,
+      enabled: !!a.enabled,
+      hour: clamp(parseInt(num(a.hour, 7), 10), 0, 23),
+      minute: clamp(parseInt(num(a.minute, 30), 10), 0, 59),
+      repeat: a.repeat !== false,
+      days: (parseInt(num(a.days, ALL_DAYS), 10) & ALL_DAYS) || ALL_DAYS,
+      label: typeof a.label === 'string' ? a.label.slice(0, 24) : ''
+    };
+  }
+
   function saveState() {
-    state.savedAt = Date.now();
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (e) { /* хранилище недоступно */ }
   }
 
   /* ————— Расчёт ближайшего срабатывания (тот же алгоритм, что в NextAlarm.java) ————— */
-  function nextOccurrence(from) {
+  function nextOccurrence(alarm, from) {
     var now = from === undefined ? Date.now() : from;
-    var after = Math.max(now, state.skipBefore || 0);
-    var mask = (state.days & ALL_DAYS) || ALL_DAYS;
+    var after = now; /* skipBefore входит в native triggerAt, на клиенте не важен */
+    var mask = (alarm.days & ALL_DAYS) || ALL_DAYS;
     for (var offset = 0; offset <= 8; offset++) {
       var d = new Date(after);
       d.setDate(d.getDate() + offset);
-      d.setHours(state.hour, state.minute, 0, 0);
+      d.setHours(alarm.hour, alarm.minute, 0, 0);
       if (d.getTime() <= after) continue;
       var bit = 1 << ((d.getDay() + 6) % 7); /* пн = бит 0 */
-      if (!state.repeat || (mask & bit)) return d.getTime();
+      if (!alarm.repeat || (mask & bit)) return d.getTime();
     }
     return after + 86400000;
   }
 
-  function daysSummary() {
-    var m = state.days & ALL_DAYS;
+  function daysSummary(alarm) {
+    var m = alarm.days & ALL_DAYS;
     if (m === ALL_DAYS || m === 0) return 'Каждый день';
     if (m === WEEKDAYS) return 'Будни';
     if (m === WEEKEND) return 'Выходные';
@@ -174,6 +231,26 @@
     return 'минут';
   }
 
+  /* Ближайший включённый будильник (время, время срабатывания). */
+  function nearestEnabled() {
+    var best = null, bestTs = 0;
+    for (var i = 0; i < state.alarms.length; i++) {
+      var a = state.alarms[i];
+      if (!a.enabled) continue;
+      var ts = nextOccurrence(a);
+      if (!best || ts < bestTs) { best = a; bestTs = ts; }
+    }
+    return { alarm: best, ts: bestTs };
+  }
+
+  function nextId() {
+    var maxId = 0;
+    for (var i = 0; i < state.alarms.length; i++) {
+      if (state.alarms[i].id > maxId) maxId = state.alarms[i].id;
+    }
+    return maxId + 1;
+  }
+
   /* ————— Тема ————— */
   function applyTheme() {
     var light = state.theme === 1;
@@ -188,50 +265,137 @@
   }
 
   /* ————— Отрисовка ————— */
-  function statusString() {
-    if (snoozeActive()) return 'Отложен до ' + formatDateHM(state.snoozeUntil);
-    var name = state.label || 'Будильник';
-    if (state.enabled) {
-      var parts = [state.label || 'Будильник включён'];
-      if (state.repeat) {
-        parts.push(daysSummary() === 'Каждый день' ? 'ежедневно' : daysSummary());
-      }
-      if (state.repeat && state.skipBefore > Date.now()) parts.push('пропуск');
-      return parts.join(' · ');
-    }
-    return state.label ? name + ' · выключен' : 'Будильник выключен';
-  }
-
   function render() {
-    var active = state.enabled || snoozeActive();
-    app.classList.toggle('active', active);
-    card.classList.toggle('norepeat', !state.repeat);
+    var nearest = nearestEnabled();
+    var enabledCount = 0;
+    for (var i = 0; i < state.alarms.length; i++) {
+      if (state.alarms[i].enabled) enabledCount++;
+    }
 
-    timeBtn.textContent = formatHM(state.hour, state.minute);
-    powerBtn.classList.toggle('on', state.enabled);
-    powerBtn.setAttribute('aria-pressed', state.enabled ? 'true' : 'false');
-    statusText.textContent = statusString();
+    app.classList.toggle('active', enabledCount > 0);
 
-    var d = new Date();
-    nowText.textContent = formatHM(d.getHours(), d.getMinutes());
-    if (snoozeActive()) {
-      nextText.textContent = 'отложен на ' + state.snoozeMinutes + ' ' + minutesWord(state.snoozeMinutes);
-    } else if (state.enabled) {
-      nextText.textContent = humanDuration(nextOccurrence() - Date.now());
+    /* Статусная строка */
+    if (state.alarms.length === 0) {
+      statusText.textContent = 'Будильников нет';
+    } else if (enabledCount === 0) {
+      statusText.textContent = 'Все будильники выключены';
+    } else if (enabledCount === 1) {
+      statusText.textContent = '1 будильник включён';
     } else {
-      nextText.textContent = 'нажмите, чтобы настроить';
+      statusText.textContent = enabledCount + ' будильника включено';
+    }
+
+    /* Верхние часы: ближайший включённый будильник */
+    if (nearest.alarm) {
+      timeBtn.textContent = formatHM(nearest.alarm.hour, nearest.alarm.minute);
+      nowText.hidden = false;
+      metaMid.hidden = false;
+      nextText.textContent = (nearest.alarm.label || 'Будильник') + ' · ' + humanDuration(nearest.ts - Date.now());
+    } else {
+      timeBtn.textContent = '--:--';
+      nowText.hidden = true;
+      metaMid.hidden = true;
+      nextText.textContent = state.alarms.length === 0 ? 'нажмите «+», чтобы создать' : 'все выключены';
     }
 
     soundValue.textContent = state.soundTitle || 'По умолчанию';
-    repeatValue.textContent = state.repeat ? daysSummary() : 'Один раз';
-    repeatSwitch.setAttribute('aria-checked', state.repeat ? 'true' : 'false');
-    snoozeSub.textContent = 'Отложить на ' + state.snoozeMinutes + ' ' + minutesWord(state.snoozeMinutes);
 
-    var dayBtns = daysRow.querySelectorAll('.day');
-    for (var i = 0; i < dayBtns.length; i++) {
-      dayBtns[i].classList.toggle('on', !!(state.days & (1 << i)));
+    /* Нижняя секция: звонок или создание */
+    var ringing = AlarmServiceRunning();
+    createBtn.hidden = ringing;
+    snoozeBtn.hidden = !ringing;
+    disableBtn.hidden = !ringing;
+    if (ringing) {
+      snoozeSub.textContent = 'Отложить на ' + state.snoozeMinutes + ' ' + minutesWord(state.snoozeMinutes);
+    } else {
+      createSub.textContent = state.alarms.length >= MAX_ALARMS
+        ? 'максимум — ' + MAX_ALARMS
+        : 'создано ' + state.alarms.length + ' из ' + MAX_ALARMS;
     }
+
+    renderList();
     renderSettings();
+  }
+
+  /* Лёгкое обновление раз в секунду: только верхние часы и «через …».
+     Список будильников не перерисовываем, чтобы не мешать касаниям. */
+  function renderTop() {
+    var nearest = nearestEnabled();
+    if (nearest.alarm) {
+      timeBtn.textContent = formatHM(nearest.alarm.hour, nearest.alarm.minute);
+      nowText.hidden = false;
+      metaMid.hidden = false;
+      nowText.textContent = formatHM(new Date().getHours(), new Date().getMinutes());
+      nextText.textContent = (nearest.alarm.label || 'Будильник') + ' · ' + humanDuration(nearest.ts - Date.now());
+    }
+  }
+
+  function AlarmServiceRunning() {
+    return ringingId >= 0;
+  }
+
+  function renderList() {
+    alarmList.innerHTML = '';
+    emptyHint.hidden = state.alarms.length > 0;
+    for (var i = 0; i < state.alarms.length; i++) {
+      alarmList.appendChild(buildAlarmRow(state.alarms[i]));
+    }
+  }
+
+  function buildAlarmRow(a) {
+    var row = document.createElement('div');
+    row.className = 'arow' + (a.enabled ? ' on' : '');
+    row.setAttribute('data-id', String(a.id));
+
+    var time = document.createElement('span');
+    time.className = 'atime';
+    time.textContent = formatHM(a.hour, a.minute);
+    row.appendChild(time);
+
+    var info = document.createElement('span');
+    info.className = 'ainfo';
+    var label = document.createElement('span');
+    label.className = 'alabel';
+    if (a.label) {
+      label.textContent = a.label;
+    } else {
+      label.classList.add('dim');
+      label.textContent = 'Будильник';
+    }
+    var sub = document.createElement('span');
+    sub.className = 'asub';
+    sub.textContent = a.repeat ? daysSummary(a) : 'Один раз';
+    info.appendChild(label);
+    info.appendChild(sub);
+    row.appendChild(info);
+
+    var sw = document.createElement('button');
+    sw.type = 'button';
+    sw.className = 'switch';
+    sw.setAttribute('role', 'switch');
+    sw.setAttribute('aria-checked', a.enabled ? 'true' : 'false');
+    sw.setAttribute('aria-label', 'Включить будильник ' + formatHM(a.hour, a.minute));
+    sw.appendChild(document.createElement('span'));
+    sw.addEventListener('click', function (event) {
+      event.stopPropagation();
+      toggleAlarm(a.id);
+    });
+    row.appendChild(sw);
+
+    row.addEventListener('click', function () {
+      openEditor(a.id);
+    });
+    return row;
+  }
+
+  function toggleAlarm(id) {
+    var a = alarmById(id);
+    if (!a) return;
+    a.enabled = !a.enabled;
+    saveState();
+    render();
+    pushState();
+    toast(a.enabled ? 'Включён на ' + formatHM(a.hour, a.minute) : 'Будильник ' + formatHM(a.hour, a.minute) + ' выключен');
   }
 
   function renderSettings() {
@@ -250,40 +414,13 @@
     var vr = $('volumeRange');
     if (document.activeElement !== vr) vr.value = state.volume;
     $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
-    if (document.activeElement !== $('labelInput')) $('labelInput').value = state.label;
-
-    var canSkip = state.enabled && state.repeat && !snoozeActive();
-    var skipActive = state.skipBefore > Date.now();
-    var skipBtn = $('skipBtn');
-    skipBtn.disabled = !(canSkip || skipActive);
-    skipBtn.textContent = skipActive ? 'Вернуть ближайший' : 'Пропустить ближайший';
-    var hint = '';
-    if (skipActive) hint = 'Ближайший звонок пропущен. Следующий: ' + describeTs(nextOccurrence()) + '.';
-    else if (canSkip) hint = 'Ближайший звонок: ' + describeTs(nextOccurrence()) + '.';
-    else hint = 'Доступно, когда включён повторяющийся будильник.';
-    $('skipHint').textContent = hint;
-  }
-
-  function describeTs(ts) {
-    var d = new Date(ts);
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
-    var diff = Math.round((new Date(ts).setHours(0, 0, 0, 0) - today.getTime()) / 86400000);
-    var day = diff === 0 ? 'сегодня' : (diff === 1 ? 'завтра' : DAY_NAMES[(d.getDay() + 6) % 7].toLowerCase() + ', ' + d.getDate() + '.' + pad(d.getMonth() + 1));
-    return day + ' в ' + formatHM(d.getHours(), d.getMinutes());
   }
 
   /* ————— Связь с Android ————— */
   function configObject() {
     return {
-      enabled: state.enabled,
-      hour: state.hour,
-      minute: state.minute,
-      repeat: state.repeat,
-      days: state.days,
-      skipBefore: state.skipBefore,
+      alarms: state.alarms,
       soundUri: state.soundUri || '',
-      label: state.label || '',
       snoozeMinutes: state.snoozeMinutes,
       maxSnoozes: state.maxSnoozes,
       fadeSeconds: state.fadeSeconds,
@@ -295,13 +432,13 @@
     };
   }
 
-  /* Меняется время, дни, повтор или вкл/выкл — переустанавливаем будильник. */
-  function pushSchedule() {
+  /* Полная синхронизация: список будильников + настройки. */
+  function pushState() {
     if (!bridge || typeof bridge.applyConfig !== 'function') return;
     try { bridge.applyConfig(JSON.stringify(configObject())); } catch (e) { /* нет моста */ }
   }
 
-  /* Остальные настройки не трогают расписание и отложенный звонок. */
+  /* Только общие настройки — расписание не трогает. */
   function pushSettings() {
     if (!bridge || typeof bridge.saveSettings !== 'function') return;
     try { bridge.saveSettings(JSON.stringify(configObject())); } catch (e) { /* нет моста */ }
@@ -313,33 +450,35 @@
     try { ns = JSON.parse(bridge.getState()); } catch (e) { return; }
     if (!ns) return;
 
-    var now = Date.now();
-    var changed = false;
+    ringingId = ns.ringing === undefined ? -1 : (ns.ringing === null ? -1 : Number(ns.ringing));
 
-    if (ns.snoozeUntil > now) {
-      if (Math.abs(state.snoozeUntil - ns.snoozeUntil) > 1500) {
-        state.snoozeUntil = ns.snoozeUntil;
-        changed = true;
-      }
-    } else if (state.snoozeUntil && state.snoozeUntil <= now) {
-      state.snoozeUntil = 0;
-      changed = true;
-    }
-
-    if (state.enabled && !ns.enabled) {
-      if (ns.lastFiredAt > 0 && ns.lastFiredAt > state.savedAt) {
-        /* Одноразовый прозвенел или будильник отключили на экране звонка. */
-        state.enabled = false;
-        state.skipBefore = 0;
-        if (!(ns.snoozeUntil > now)) state.snoozeUntil = 0;
-        changed = true;
-      } else if (!(ns.snoozeUntil > now)) {
-        /* Нативные данные потеряны — восстанавливаем расписание. */
-        pushSchedule();
+    var nativeAlarms = [];
+    if (Array.isArray(ns.alarms)) {
+      for (var i = 0; i < ns.alarms.length && nativeAlarms.length < MAX_ALARMS; i++) {
+        var a = normalizeAlarm(ns.alarms[i]);
+        if (a) nativeAlarms.push(a);
       }
     }
 
-    if (changed) { saveState(); render(); }
+    /* Одноразовый будильник прозвенел или был отключён — натив — источник истины. */
+    var changed = nativeAlarms.length !== state.alarms.length;
+    if (!changed) {
+      for (var j = 0; j < nativeAlarms.length; j++) {
+        var na = nativeAlarms[j], sa = state.alarms[j];
+        if (!sa || na.id !== sa.id || na.enabled !== sa.enabled
+            || na.hour !== sa.hour || na.minute !== sa.minute
+            || na.repeat !== sa.repeat || na.days !== sa.days || na.label !== sa.label) {
+          changed = true;
+          break;
+        }
+      }
+    }
+    if (changed) {
+      state.alarms = nativeAlarms;
+      saveState();
+      if (!editing) render();
+      else renderList();
+    }
   }
 
   /* ————— Звуки ————— */
@@ -363,8 +502,8 @@
       sounds.push({ title: state.customSounds[c].title, uri: state.customSounds[c].uri, custom: true });
     }
     if (state.soundUri) {
-      for (var i = 0; i < sounds.length; i++) {
-        if (sounds[i].uri === state.soundUri) { state.soundTitle = sounds[i].title; break; }
+      for (var i2 = 0; i2 < sounds.length; i2++) {
+        if (sounds[i2].uri === state.soundUri) { state.soundTitle = sounds[i2].title; break; }
       }
     }
   }
@@ -455,7 +594,7 @@
   function toast(message) {
     toastEl.textContent = message;
     var sheetOpen = moreOverlay.classList.contains('open') || soundOverlay.classList.contains('open')
-      || timeOverlay.classList.contains('open');
+      || alarmOverlay.classList.contains('open') || disableOverlay.classList.contains('open');
     toastEl.classList.toggle('top', sheetOpen);
     toastEl.classList.add('show');
     clearTimeout(toastTimer);
@@ -475,13 +614,14 @@
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
     stopPreview();
-    if (overlay === timeOverlay) setTimeout(function () { timeInput.blur(); }, 250);
+    if (overlay === alarmOverlay) setTimeout(function () { timeInput.blur(); labelInput.blur(); }, 250);
     if (overlay === moreOverlay && document.activeElement) document.activeElement.blur();
+    if (overlay === alarmOverlay) editing = false;
     return wasOpen;
   }
 
   function closeTopSheet() {
-    var order = [moreOverlay, soundOverlay, timeOverlay, disableOverlay];
+    var order = [moreOverlay, soundOverlay, alarmOverlay, disableOverlay];
     for (var i = 0; i < order.length; i++) {
       if (order[i].classList.contains('open')) { closeSheet(order[i]); return true; }
     }
@@ -543,6 +683,131 @@
     return row;
   }
 
+  /* ————— Редактор будильника ————— */
+  function openEditor(id) {
+    var isNew = id < 0;
+    if (isNew && state.alarms.length >= MAX_ALARMS) {
+      toast('Не больше ' + MAX_ALARMS + ' будильников');
+      return;
+    }
+    editing = true;
+    editingId = isNew ? nextId() : id;
+    var a = isNew
+      ? { id: editingId, enabled: true, hour: 7, minute: 30, repeat: true, days: ALL_DAYS, label: '' }
+      : alarmById(id);
+    if (!a) { editing = false; return; }
+
+    if (isNew) {
+      /* Новому будильнику подсказываем время: через 8 часов от текущего или 07:30. */
+      var suggest = new Date(Date.now() + 8 * 3600 * 1000);
+      a.hour = suggest.getHours();
+      a.minute = suggest.getMinutes();
+    }
+
+    alarmTitle.textContent = isNew ? 'Новый будильник' : 'Будильник';
+    timeInput.value = formatHM(a.hour, a.minute);
+    repeatSwitch.setAttribute('aria-checked', a.repeat ? 'true' : 'false');
+    updateDaysRow(a.days);
+    labelInput.value = a.label || '';
+    deleteAlarmBtn.hidden = isNew;
+    openSheet(alarmOverlay);
+  }
+
+  function updateDaysRow(days) {
+    var btns = daysRow.querySelectorAll('.day');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('on', !!(days & (1 << i)));
+    }
+    var mask = days & ALL_DAYS;
+    daysRow.classList.toggle('disabled', !editingRepeat());
+  }
+
+  function editingRepeat() {
+    return repeatSwitch.getAttribute('aria-checked') === 'true';
+  }
+
+  function editorAlarm() {
+    var parts = (timeInput.value || '').split(':');
+    var hour = parseInt(parts[0], 10);
+    var minute = parseInt(parts[1], 10);
+    var days = 0;
+    var btns = daysRow.querySelectorAll('.day');
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].classList.contains('on')) days |= (1 << parseInt(btns[i].getAttribute('data-day'), 10));
+    }
+    return {
+      id: editingId,
+      enabled: true,
+      hour: isFinite(hour) ? clamp(hour, 0, 23) : 7,
+      minute: isFinite(minute) ? clamp(minute, 0, 59) : 30,
+      repeat: editingRepeat(),
+      days: days || ALL_DAYS,
+      label: labelInput.value.slice(0, 24)
+    };
+  }
+
+  alarmSaveBtn.addEventListener('click', function () {
+    if (!editing) return;
+    var a = editorAlarm();
+    if (repeatSwitch.getAttribute('aria-checked') === 'true' && (a.days & ALL_DAYS) === 0) {
+      toast('Выберите хотя бы один день');
+      return;
+    }
+    if (!alarmById(a.id)) {
+      if (state.alarms.length >= MAX_ALARMS) {
+        toast('Не больше ' + MAX_ALARMS + ' будильников');
+        return;
+      }
+      state.alarms.push(a);
+    } else {
+      for (var i = 0; i < state.alarms.length; i++) {
+        if (state.alarms[i].id === a.id) { state.alarms[i] = a; break; }
+      }
+    }
+    editing = false;
+    closeSheet(alarmOverlay);
+    saveState();
+    render();
+    pushState();
+    toast('Будильник на ' + formatHM(a.hour, a.minute));
+  });
+
+  deleteAlarmBtn.addEventListener('click', function () {
+    if (!editing) return;
+    var idx = -1;
+    for (var i = 0; i < state.alarms.length; i++) {
+      if (state.alarms[i].id === editingId) { idx = i; break; }
+    }
+    if (idx >= 0) {
+      state.alarms.splice(idx, 1);
+      saveState();
+      render();
+      pushState();
+      toast('Будильник удалён');
+    }
+    editing = false;
+    closeSheet(alarmOverlay);
+  });
+
+  repeatSwitch.addEventListener('click', function () {
+    repeatSwitch.setAttribute('aria-checked', editingRepeat() ? 'false' : 'true');
+    daysRow.classList.toggle('disabled', !editingRepeat());
+  });
+
+  daysRow.addEventListener('click', function (event) {
+    if (!editingRepeat()) return;
+    var btn = event.target.closest ? event.target.closest('.day') : null;
+    if (!btn) return;
+    var days = 0, next;
+    var btns = daysRow.querySelectorAll('.day');
+    for (var i = 0; i < btns.length; i++) {
+      if (btns[i].classList.contains('on')) days |= (1 << parseInt(btns[i].getAttribute('data-day'), 10));
+    }
+    next = days ^ (1 << parseInt(btn.getAttribute('data-day'), 10));
+    if ((next & ALL_DAYS) === 0) { toast('Выберите хотя бы один день'); return; }
+    updateDaysRow(next);
+  });
+
   /* ————— Надёжность ————— */
   function refreshHealth() {
     var group = $('healthGroup');
@@ -586,80 +851,99 @@
     });
   }
 
-  /* ————— Действия ————— */
-  function enableAlarm(enabled) {
-    state.enabled = enabled;
-    state.snoozeUntil = 0;
-    state.skipBefore = 0;
-    saveState();
+  /* ————— Звонок с главного экрана ————— */
+  snoozeBtn.addEventListener('click', function () {
+    var minutes = state.snoozeMinutes;
+    if (bridge && typeof bridge.snooze === 'function') {
+      try {
+        bridge.stopRinging();
+        bridge.snooze(minutes, state.soundUri || '');
+      } catch (e) { /* ignore */ }
+    }
+    ringingId = -1;
     render();
-    pushSchedule();
+    toast('Отложено на ' + minutes + ' ' + minutesWord(minutes));
+    setTimeout(syncFromNative, 700);
+  });
+
+  disableBtn.addEventListener('click', function () {
+    openSheet(disableOverlay);
+  });
+
+  $('disableDayBtn').addEventListener('click', function () {
+    if (bridge && typeof bridge.stopAlarm === 'function') {
+      try { bridge.stopAlarm('skip'); } catch (e) { /* ignore */ }
+    } else if (bridge && typeof bridge.stopRinging === 'function') {
+      try { bridge.stopRinging(); } catch (e) { /* ignore */ }
+    }
+    ringingId = -1;
+    render();
+    closeSheet(disableOverlay);
+    toast('Звонок остановлен, расписание сохранено');
+    setTimeout(syncFromNative, 700);
+  });
+
+  $('disableForeverBtn').addEventListener('click', function () {
+    if (bridge && typeof bridge.stopAlarm === 'function') {
+      try { bridge.stopAlarm('forever'); } catch (e) { /* ignore */ }
+    } else if (bridge && typeof bridge.stopRinging === 'function') {
+      try { bridge.stopRinging(); } catch (e) { /* ignore */ }
+    }
+    ringingId = -1;
+    render();
+    closeSheet(disableOverlay);
+    toast('Будильник отключён полностью');
+    setTimeout(syncFromNative, 700);
+  });
+
+  /* ————— Настройки в шторке ————— */
+  var chipGroups = moreOverlay.querySelectorAll('.chips');
+  for (var g = 0; g < chipGroups.length; g++) {
+    chipGroups[g].addEventListener('click', function (event) {
+      var chip = event.target.closest ? event.target.closest('.chip') : null;
+      if (!chip) return;
+      var key = event.currentTarget.getAttribute('data-key');
+      state[key] = Number(chip.getAttribute('data-v'));
+      saveState();
+      render();
+      pushSettings();
+      if (key === 'theme') applyTheme();
+      if (key === 'challenge') renderSettings();
+    });
   }
 
-  function setTime(hour, minute) {
-    state.hour = hour;
-    state.minute = minute;
-    state.enabled = true;
-    state.snoozeUntil = 0;
-    state.skipBefore = 0;
-    saveState();
-    render();
-    pushSchedule();
-    toast('Будильник на ' + formatHM(hour, minute));
-  }
-
-  function scheduleChanged() {
-    state.snoozeUntil = 0;
-    state.skipBefore = 0;
-    saveState();
-    render();
-    pushSchedule();
-  }
-
-  function settingChanged() {
+  $('vibrateSwitch').addEventListener('click', function () {
+    state.vibrate = !state.vibrate;
     saveState();
     render();
     pushSettings();
-  }
+  });
+
+  $('challengeSwitch').addEventListener('click', function () {
+    state.challenge = !state.challenge;
+    saveState();
+    render();
+    pushSettings();
+    toast(state.challenge ? 'Для отключения нужно решить пример' : 'Пример для отключения выключен');
+  });
+
+  $('volumeRange').addEventListener('input', function () {
+    state.volume = clamp(parseInt(this.value, 10) || 0, 0, 100);
+    $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
+  });
+  $('volumeRange').addEventListener('change', function () { saveState(); render(); pushSettings(); });
 
   /* ————— События ————— */
+  addBtn.addEventListener('click', function () { openEditor(-1); });
+  createBtn.addEventListener('click', function () { openEditor(-1); });
+
   timeBtn.addEventListener('click', function () {
-    timeInput.value = formatHM(state.hour, state.minute);
-    openSheet(timeOverlay);
-  });
-
-  timeSave.addEventListener('click', function () {
-    var parts = (timeInput.value || '').split(':');
-    if (parts.length < 2) { toast('Укажите время'); return; }
-    var hour = parseInt(parts[0], 10);
-    var minute = parseInt(parts[1], 10);
-    if (!isFinite(hour) || !isFinite(minute)) { toast('Укажите время'); return; }
-    setTime(clamp(hour, 0, 23), clamp(minute, 0, 59));
-    closeSheet(timeOverlay);
-  });
-
-  powerBtn.addEventListener('click', function () {
-    enableAlarm(!state.enabled);
-    toast(state.enabled ? 'Будильник включён' : 'Будильник отключён');
+    /* Крупные часы: редактируем ближайший включённый, либо открываем создание. */
+    var nearest = nearestEnabled();
+    openEditor(nearest.alarm ? nearest.alarm.id : -1);
   });
 
   gearBtn.addEventListener('click', function () { openSheet(moreOverlay); });
-
-  repeatSwitch.addEventListener('click', function () {
-    state.repeat = !state.repeat;
-    scheduleChanged();
-    toast(state.repeat ? 'Повтор: ' + daysSummary().toLowerCase() : 'Без повтора');
-  });
-
-  daysRow.addEventListener('click', function (event) {
-    var btn = event.target.closest ? event.target.closest('.day') : null;
-    if (!btn) return;
-    var bit = 1 << parseInt(btn.getAttribute('data-day'), 10);
-    var next = state.days ^ bit;
-    if ((next & ALL_DAYS) === 0) { toast('Выберите хотя бы один день'); return; }
-    state.days = next;
-    scheduleChanged();
-  });
 
   $('soundRow').addEventListener('click', function () { openSheet(soundOverlay); });
 
@@ -669,123 +953,6 @@
     } else {
       toast('Выбор файла доступен в приложении');
     }
-  });
-
-  snoozeBtn.addEventListener('click', function () {
-    var minutes = state.snoozeMinutes;
-    state.snoozeUntil = Date.now() + minutes * 60000;
-    saveState();
-    render();
-    if (bridge) {
-      try {
-        if (typeof bridge.stopRinging === 'function') bridge.stopRinging();
-        if (typeof bridge.snooze === 'function') bridge.snooze(minutes, state.soundUri || '');
-      } catch (e) { /* ignore */ }
-    }
-    toast('Отложено на ' + minutes + ' ' + minutesWord(minutes));
-  });
-
-  /* Отключить: выбор «на сутки или совсем». */
-  function openDisableSheet() {
-    var canSkip = state.enabled && state.repeat;
-    $('disableDayBtn').hidden = !canSkip;
-    openSheet(disableOverlay);
-  }
-
-  disableBtn.addEventListener('click', function () {
-    if (!state.enabled && !snoozeActive()) {
-      if (bridge) {
-        try {
-          if (typeof bridge.stopRinging === 'function') bridge.stopRinging();
-          bridge.cancelAlarm();
-        } catch (e) { /* ignore */ }
-      }
-      toast('Будильник уже выключен');
-      return;
-    }
-    openDisableSheet();
-  });
-
-  $('disableDayBtn').addEventListener('click', function () {
-    var now = Date.now();
-    var skipped = snoozeActive() || !state.enabled ? 0 : nextOccurrence(now);
-    if (skipped) {
-      state.skipBefore = skipped;
-      toast('Пропущен звонок ' + describeTs(skipped));
-    }
-    if (snoozeActive()) state.snoozeUntil = 0;
-    saveState();
-    render();
-    pushSchedule();
-    closeSheet(disableOverlay);
-  });
-
-  $('disableForeverBtn').addEventListener('click', function () {
-    state.enabled = false;
-    state.snoozeUntil = 0;
-    state.skipBefore = 0;
-    saveState();
-    render();
-    if (bridge) {
-      try {
-        if (typeof bridge.stopRinging === 'function') bridge.stopRinging();
-      } catch (e) { /* ignore */ }
-    }
-    pushSchedule();
-    toast('Будильник отключён полностью');
-    closeSheet(disableOverlay);
-  });
-
-  /* Настройки в шторке */
-  var chipGroups = moreOverlay.querySelectorAll('.chips');
-  for (var g = 0; g < chipGroups.length; g++) {
-    chipGroups[g].addEventListener('click', function (event) {
-      var chip = event.target.closest ? event.target.closest('.chip') : null;
-      if (!chip) return;
-      var key = event.currentTarget.getAttribute('data-key');
-      state[key] = Number(chip.getAttribute('data-v'));
-      settingChanged();
-      if (key === 'theme') applyTheme();
-      if (key === 'challenge') renderSettings();
-    });
-  }
-
-  $('vibrateSwitch').addEventListener('click', function () {
-    state.vibrate = !state.vibrate;
-    settingChanged();
-  });
-
-  $('challengeSwitch').addEventListener('click', function () {
-    state.challenge = !state.challenge;
-    settingChanged();
-    toast(state.challenge ? 'Для отключения нужно решить пример' : 'Пример для отключения выключен');
-  });
-
-  $('volumeRange').addEventListener('input', function () {
-    state.volume = clamp(parseInt(this.value, 10) || 0, 0, 100);
-    $('volumeValue').textContent = state.volume ? state.volume + '%' : 'Как в системе';
-  });
-  $('volumeRange').addEventListener('change', function () { settingChanged(); });
-
-  $('labelInput').addEventListener('input', function () {
-    state.label = this.value.slice(0, 24);
-    saveState();
-    statusText.textContent = statusString();
-  });
-  $('labelInput').addEventListener('change', function () { settingChanged(); });
-  $('labelInput').addEventListener('blur', function () { settingChanged(); });
-
-  $('skipBtn').addEventListener('click', function () {
-    if (state.skipBefore > Date.now()) {
-      state.skipBefore = 0;
-      toast('Ближайший звонок возвращён');
-    } else if (state.enabled && state.repeat) {
-      state.skipBefore = nextOccurrence();
-      toast('Пропускаем: ' + describeTs(nextOccurrence()));
-    }
-    saveState();
-    render();
-    pushSchedule();
   });
 
   $('testBtn').addEventListener('click', function () {
@@ -816,14 +983,14 @@
   for (var c = 0; c < closes.length; c++) {
     closes[c].addEventListener('click', function (event) {
       var target = event.currentTarget.getAttribute('data-close');
-      closeSheet(target === 'time' ? timeOverlay
-        : target === 'more' ? moreOverlay
+      closeSheet(target === 'more' ? moreOverlay
         : target === 'disable' ? disableOverlay
+        : target === 'alarm' ? alarmOverlay
         : soundOverlay);
     });
   }
 
-  [timeOverlay, soundOverlay, moreOverlay, disableOverlay].forEach(function (overlay) {
+  [soundOverlay, moreOverlay, alarmOverlay, disableOverlay].forEach(function (overlay) {
     overlay.addEventListener('click', function (event) {
       if (event.target === overlay) closeSheet(overlay);
     });
@@ -834,12 +1001,12 @@
   });
 
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) { render(); syncFromNative(); } else { stopPreview(); }
+    if (!document.hidden) { syncFromNative(); render(); } else { stopPreview(); }
   });
 
   window.__nativeResume = function () {
-    render();
     syncFromNative();
+    render();
     if (moreOverlay.classList.contains('open')) refreshHealth();
   };
 
@@ -847,8 +1014,29 @@
   loadSoundList();
   applyTheme();
   syncFromNative();
+  /* Если в v1 был включён будильник, а нативная миграция не создала его — пушим. */
+  if (bridge && state.alarms.length === 0 && hadOldAlarm()) {
+    var restored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    if (restored && Array.isArray(restored.alarms) && restored.alarms.length) {
+      state.alarms = restored.alarms;
+    }
+  }
   render();
+  pushState();
   pushSettings();
-  setInterval(render, 1000);
+  setInterval(function () {
+    if (!editing) renderTop();
+  }, 1000);
   setTimeout(syncFromNative, 600);
+
+  function hadOldAlarm() {
+    /* v1-данные уже перенесены в v2 при loadState: миграционный будильник
+       попадает в state через loadState только если натив вернул пусто. */
+    try {
+      var s = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      return Array.isArray(s.alarms) && s.alarms.length > 0;
+    } catch (e) {
+      return false;
+    }
+  }
 })();

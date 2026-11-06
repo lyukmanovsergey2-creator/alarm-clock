@@ -44,6 +44,8 @@ public class RingActivity extends Activity {
     private View mainView;
     private final Random random = new Random();
     private int answer;
+    /** Какой будильник звонит (id). */
+    private int alarmId = 0;
     /** После решённого примера — показать выбор «на сутки или совсем», а не отключать сразу. */
     private boolean challengeThenChoose;
     private StringBuilder typed = new StringBuilder();
@@ -70,6 +72,14 @@ public class RingActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        /* Какой будильник звонит: из extra, иначе из сервиса (при дозвоне/шторке). */
+        int fromIntent = getIntent() != null
+                ? getIntent().getIntExtra(AlarmScheduler.EXTRA_ALARM_ID, -1) : -1;
+        alarmId = fromIntent >= 0 ? fromIntent : AlarmService.currentAlarmId;
+        if (alarmId < 0) {
+            alarmId = 0;
+        }
+
         applyPalette(AlarmScheduler.prefs(this).getBoolean("lightTheme", false));
 
         if (Build.VERSION.SDK_INT >= 27) {
@@ -89,7 +99,23 @@ public class RingActivity extends Activity {
         mainView = buildInterface();
         setContentView(mainView);
         updateClock();
-        AlarmScheduler.logLine(this, "Экран звонка открыт");
+        AlarmScheduler.logLine(this, "Экран звонка открыт (будильник " + alarmId + ")");
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        /* Экран одиночный (singleInstance): если пришёл другой будильник —
+           обновляем id и подпись, заново показывая главный вид. */
+        if (intent != null && intent.hasExtra(AlarmScheduler.EXTRA_ALARM_ID)) {
+            int id = intent.getIntExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId);
+            if (id != alarmId) {
+                alarmId = id;
+                mainView = buildInterface();
+                setContentView(mainView);
+                updateClock();
+            }
+        }
     }
 
     private void applyPalette(boolean light) {
@@ -134,7 +160,7 @@ public class RingActivity extends Activity {
         top.addView(bell, bellParams);
 
         TextView label = new TextView(this);
-        String custom = AlarmScheduler.prefs(this).getString("label", "");
+        String custom = AlarmScheduler.prefs(this).getString(AlarmScheduler.key(alarmId, "label"), "");
         label.setText(custom.isEmpty() ? "БУДИЛЬНИК" : custom.toUpperCase(new Locale("ru")));
         label.setMaxLines(2);
         label.setTextSize(12);
@@ -174,7 +200,7 @@ public class RingActivity extends Activity {
         SharedPreferences cfg = AlarmScheduler.prefs(this);
         int minutes = Math.max(1, Math.min(120, cfg.getInt("snoozeMinutes", 10)));
         int max = cfg.getInt("maxSnoozes", 0);
-        int left = max - cfg.getInt("snoozeCount", 0);
+        int left = max - cfg.getInt(AlarmScheduler.key(alarmId, "snoozeCount"), 0);
         boolean limited = max > 0 && !AlarmService.testing;
         boolean snoozeAllowed = !limited || left > 0;
         String snoozeSub = "Отложить на " + minutes + " " + minutesWord(minutes);
@@ -463,6 +489,7 @@ public class RingActivity extends Activity {
         try {
             Intent intent = new Intent(this, AlarmService.class);
             intent.setAction(AlarmService.ACTION_SNOOZE);
+            intent.putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId);
             startService(intent);
         } catch (Exception ignored) {
         }
@@ -498,7 +525,7 @@ public class RingActivity extends Activity {
         root.addView(hint);
 
         SharedPreferences cfg = AlarmScheduler.prefs(this);
-        boolean repeat = cfg.getBoolean("repeat", false);
+        boolean repeat = cfg.getBoolean(AlarmScheduler.key(alarmId, "repeat"), true);
 
         if (repeat) {
             View day = buildAction("На сутки",
@@ -551,6 +578,7 @@ public class RingActivity extends Activity {
     /** Гасит звонок, расписание будильника не трогает. */
     private void stopRingingOnly() {
         try {
+            AlarmScheduler.logLine(this, "будильник " + alarmId + " погашен («на сутки»), расписание сохранено");
             Intent intent = new Intent(this, AlarmService.class);
             intent.setAction(AlarmService.ACTION_SILENCE);
             startService(intent);
@@ -560,22 +588,17 @@ public class RingActivity extends Activity {
     }
 
     private void finishDisable() {
-        /* Гарантированно выключаем: записываем enabled=false ДО остановки сервиса,
+        /* Гарантированно выключаем этот будильник: enabled=false ДО остановки сервиса,
            чтобы опоздавшие доставки обоих каналов больше не звонили. */
         try {
-            AlarmScheduler.prefs(this).edit()
-                    .putBoolean("enabled", false)
-                    .putLong("triggerAt", 0)
-                    .putLong("snoozeAt", 0)
-                    .putLong("lastFiredAt", System.currentTimeMillis())
-                    .apply();
-            AlarmScheduler.cancelAll(this);
-            AlarmScheduler.logLine(this, "Отключено кнопкой «Совсем»");
+            AlarmScheduler.disableForever(this, alarmId);
+            AlarmScheduler.logLine(this, "Отключено кнопкой «Совсем» (будильник " + alarmId + ")");
         } catch (Exception ignored) {
         }
         try {
             Intent intent = new Intent(this, AlarmService.class);
             intent.setAction(AlarmService.ACTION_DISABLE);
+            intent.putExtra(AlarmScheduler.EXTRA_ALARM_ID, alarmId);
             startService(intent);
         } catch (Exception ignored) {
         }

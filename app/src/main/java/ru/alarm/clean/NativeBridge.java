@@ -94,14 +94,27 @@ public class NativeBridge {
         SharedPreferences prefs = AlarmScheduler.prefs(activity);
         JSONObject object = new JSONObject();
         try {
-            object.put("enabled", prefs.getBoolean("enabled", false));
-            object.put("triggerAt", prefs.getLong("triggerAt", 0));
-            object.put("snoozeUntil", prefs.getLong("snoozeAt", 0));
-            object.put("lastFiredAt", prefs.getLong("lastFiredAt", 0));
-            object.put("hour", prefs.getInt("hour", 7));
-            object.put("minute", prefs.getInt("minute", 30));
-            object.put("repeat", prefs.getBoolean("repeat", true));
+            int[] ids = AlarmScheduler.alarmIds(prefs);
+            JSONArray alarms = new JSONArray();
+            for (int id : ids) {
+                JSONObject a = new JSONObject();
+                a.put("id", id);
+                a.put("enabled", prefs.getBoolean(AlarmScheduler.key(id, "enabled"), false));
+                a.put("hour", prefs.getInt(AlarmScheduler.key(id, "hour"), 7));
+                a.put("minute", prefs.getInt(AlarmScheduler.key(id, "minute"), 30));
+                a.put("repeat", prefs.getBoolean(AlarmScheduler.key(id, "repeat"), true));
+                a.put("days", prefs.getInt(AlarmScheduler.key(id, "days"), NextAlarm.ALL_DAYS));
+                a.put("label", prefs.getString(AlarmScheduler.key(id, "label"), ""));
+                a.put("skipBefore", prefs.getLong(AlarmScheduler.key(id, "skipBefore"), 0));
+                a.put("triggerAt", prefs.getLong(AlarmScheduler.key(id, "triggerAt"), 0));
+                a.put("snoozeUntil", prefs.getLong(AlarmScheduler.key(id, "snoozeAt"), 0));
+                a.put("lastFiredAt", prefs.getLong(AlarmScheduler.key(id, "lastFiredAt"), 0));
+                alarms.put(a);
+            }
+            object.put("alarms", alarms);
+            object.put("ringing", AlarmService.running ? AlarmService.currentAlarmId : -1);
             object.put("soundUri", prefs.getString("soundUri", ""));
+            object.put("snoozeMinutes", prefs.getInt("snoozeMinutes", 10));
         } catch (Exception ignored) {
             /* возвращаем пустой объект */
         }
@@ -120,8 +133,10 @@ public class NativeBridge {
     }
 
     /**
-     * Сохраняет всё и (пере)планирует будильник. Возвращает JSON {"triggerAt": ...}.
-     * Если enabled=false — будильник отменяется, настройки остаются.
+     * Полная синхронизация: список будильников + глобальные настройки.
+     * JS присылает весь список при любом изменении; нативная сторона приводит
+     * хранилище и системные будильники в соответствие (лишние удаляются).
+     * Возвращает JSON {"next": ...} — ближайшее время срабатывания.
      */
     @JavascriptInterface
     public String applyConfig(String json) {
@@ -131,22 +146,64 @@ public class NativeBridge {
             SharedPreferences prefs = AlarmScheduler.prefs(activity);
             SharedPreferences.Editor editor = prefs.edit();
             writeSettings(config, editor);
-            editor.putInt("hour", clampInt(config.optInt("hour", 7), 0, 23));
-            editor.putInt("minute", clampInt(config.optInt("minute", 30), 0, 59));
-            editor.putBoolean("repeat", config.optBoolean("repeat", true));
-            editor.putInt("days", config.optInt("days", NextAlarm.ALL_DAYS));
-            editor.putLong("skipBefore", config.optLong("skipBefore", 0));
-            editor.commit();
 
-            if (config.optBoolean("enabled", false)) {
-                result.put("triggerAt", AlarmScheduler.scheduleFromPrefs(activity));
-            } else {
-                AlarmScheduler.cancelAll(activity);
-                result.put("triggerAt", 0);
+            /* Читаем присланный список будильников (до 15). */
+            java.util.List<Integer> newIds = new java.util.ArrayList<Integer>();
+            JSONArray items = config.optJSONArray("alarms");
+            if (items != null) {
+                for (int i = 0; i < items.length() && newIds.size() < AlarmScheduler.MAX_ALARMS; i++) {
+                    JSONObject item = items.optJSONObject(i);
+                    if (item == null) continue;
+                    int id = item.optInt("id", -1);
+                    if (id < 0 || newIds.contains(id)) continue;
+                    newIds.add(id);
+                    int hour = clampInt(item.optInt("hour", 7), 0, 23);
+                    int minute = clampInt(item.optInt("minute", 30), 0, 59);
+                    boolean enabled = item.optBoolean("enabled", false);
+                    boolean repeat = item.optBoolean("repeat", true);
+                    int days = item.optInt("days", NextAlarm.ALL_DAYS) & NextAlarm.ALL_DAYS;
+                    String label = item.optString("label", "");
+                    long skipBefore = item.optLong("skipBefore", 0);
+                    /* Если расписание изменено — время пересчитывается, иначе
+                       сохраняем прежнее (важно для одноразовых будильников). */
+                    boolean changed = hour != prefs.getInt(AlarmScheduler.key(id, "hour"), -1)
+                            || minute != prefs.getInt(AlarmScheduler.key(id, "minute"), -1)
+                            || repeat != prefs.getBoolean(AlarmScheduler.key(id, "repeat"), !repeat)
+                            || days != prefs.getInt(AlarmScheduler.key(id, "days"), -1)
+                            || skipBefore != prefs.getLong(AlarmScheduler.key(id, "skipBefore"), -1);
+                    editor.putInt(AlarmScheduler.key(id, "hour"), hour);
+                    editor.putInt(AlarmScheduler.key(id, "minute"), minute);
+                    editor.putBoolean(AlarmScheduler.key(id, "enabled"), enabled);
+                    editor.putBoolean(AlarmScheduler.key(id, "repeat"), repeat);
+                    editor.putInt(AlarmScheduler.key(id, "days"), days);
+                    editor.putString(AlarmScheduler.key(id, "label"), label);
+                    editor.putLong(AlarmScheduler.key(id, "skipBefore"), skipBefore);
+                    if (changed) {
+                        editor.putLong(AlarmScheduler.key(id, "triggerAt"), 0);
+                    }
+                }
             }
-            AlarmScheduler.logLine(activity, "applyConfig: enabled=" + config.optBoolean("enabled", false)
-                    + ", время=" + config.optInt("hour", 7) + ":" + config.optInt("minute", 30)
-                    + ", triggerAt=" + result.optLong("triggerAt", 0));
+
+            /* Удаляем нативные будильники, которых больше нет в списке. */
+            int[] oldIds = AlarmScheduler.alarmIds(prefs);
+            for (int oldId : oldIds) {
+                if (!newIds.contains(oldId)) {
+                    AlarmScheduler.removeAlarm(activity, oldId);
+                }
+            }
+            AlarmScheduler.writeAlarmIds(editor, newIds);
+            editor.apply();
+
+            /* Ставим все будильники заново. */
+            long next = 0;
+            for (int id : newIds) {
+                long t = AlarmScheduler.scheduleAlarm(activity, id, true);
+                if (t > 0 && (next == 0 || t < next)) next = t;
+            }
+            result.put("next", next);
+            AlarmScheduler.logLine(activity, "applyConfig: будильников " + newIds.size()
+                    + ", ближайший через " + (next > 0 ? (next - System.currentTimeMillis()) / 60000 : -1)
+                    + " мин");
         } catch (Exception ignored) {
         }
         return result.toString();
@@ -174,16 +231,62 @@ public class NativeBridge {
         return Math.max(min, Math.min(max, v));
     }
 
+    /**
+     * Останавливает звонящий будильник с экрана-списка.
+     * mode "forever" — выключить звонящий будильник совсем;
+     * иначе — только заглушить звонок (расписание сохраняется).
+     */
     @JavascriptInterface
-    public void cancelAlarm() {
-        AlarmScheduler.cancelAll(activity);
+    public void stopAlarm(String mode) {
+        final int id = AlarmService.currentAlarmId;
+        if (!AlarmService.running || id < 0) {
+            return;
+        }
+        try {
+            if ("forever".equals(mode) && !AlarmService.testing) {
+                AlarmScheduler.disableForever(activity, id);
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            Intent intent = new Intent(activity, AlarmService.class);
+            intent.setAction(AlarmService.ACTION_SILENCE);
+            intent.putExtra(AlarmScheduler.EXTRA_ALARM_ID, id);
+            if (Build.VERSION.SDK_INT >= 26) {
+                activity.startForegroundService(intent);
+            } else {
+                activity.startService(intent);
+            }
+        } catch (Exception ignored) {
+        }
     }
 
+    /**
+     * Откладывает звонящий будильник (используется с главного экрана во время звонка).
+     */
     @JavascriptInterface
     public void snooze(int minutes, String soundUri) {
+        int id = AlarmService.currentAlarmId;
+        if (!AlarmService.running || id < 0) {
+            return;
+        }
         int safeMinutes = Math.max(1, Math.min(120, minutes));
+        SharedPreferences prefs = AlarmScheduler.prefs(activity);
+        int count = prefs.getInt(AlarmScheduler.key(id, "snoozeCount"), 0);
+        int max = prefs.getInt("maxSnoozes", 0);
+        if (max > 0 && count >= max) {
+            return; /* лимит исчерпан */
+        }
         long triggerAt = System.currentTimeMillis() + safeMinutes * 60000L;
-        AlarmScheduler.scheduleSnooze(activity, triggerAt, soundUri);
+        prefs.edit()
+                .putInt(AlarmScheduler.key(id, "snoozeCount"), count + 1)
+                .putString(AlarmScheduler.key(id, "snoozeSound"), soundUri == null ? "" : soundUri)
+                .apply();
+        AlarmScheduler.scheduleSnooze(activity, id, triggerAt);
+        try {
+            AlarmService.stop(activity);
+        } catch (Exception ignored) {
+        }
     }
 
     @JavascriptInterface
@@ -344,7 +447,7 @@ public class NativeBridge {
             @Override
             public void run() {
                 AlarmService.start(activity,
-                        AlarmScheduler.prefs(activity).getString("soundUri", ""), true);
+                        AlarmScheduler.prefs(activity).getString("soundUri", ""), true, -1);
             }
         });
     }

@@ -554,6 +554,27 @@
   .btn:active { transform: scale(.985); }
   .btn-ghost { background: #26262e; color: var(--text); }
   .btn-primary { background: var(--accent); color: #0b0b0d; }
+  .btn-danger { background: none; border: 1px solid rgba(255, 123, 114, .35); color: var(--danger); }
+  body.light .btn-danger { border-color: rgba(201, 75, 66, .4); }
+  body.light .btn-danger:active { background: rgba(201, 75, 66, .08); }
+
+  /* Строка-кнопка внутри шторки настроек (звук) */
+  .setrow {
+    width: 100%;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .setrow .chev { color: var(--dim); display: grid; place-items: center; }
+  .setrow .chev svg { width: 16px; height: 16px; }
 
   .toast {
     position: fixed;
@@ -622,6 +643,89 @@
   }
   .day.on { background: var(--accent); color: #0b0b0d; border-color: transparent; }
   .day.weekend:not(.on) { color: #b9877f; }
+
+  /* ————— Список будильников (средняя треть) ————— */
+  .alist {
+    max-height: calc(33.333vh - 36px);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .alist-empty {
+    padding: 18px;
+    font-size: 13px;
+    color: var(--dim);
+    text-align: center;
+    display: none;
+  }
+  #emptyHint:not([hidden]) { display: block; }
+
+  .alabel.dim { color: var(--dim); }
+
+  .daysrow.disabled { opacity: .3; pointer-events: none; }
+
+  .arow {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .05);
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .arow:last-child { border-bottom: 0; }
+  .arow:active { background: rgba(255, 255, 255, .04); }
+
+  .atime {
+    font-size: 26px;
+    font-weight: 300;
+    letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    flex: 0 0 auto;
+    transition: color .2s;
+  }
+  .arow.on .atime { color: var(--text); }
+
+  .ainfo {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .alabel {
+    font-size: 14px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .asub {
+    font-size: 11.5px;
+    color: var(--dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .arow.on .asub { color: var(--muted); }
+
+  .arow .switch { flex: 0 0 auto; }
+
+  /* ————— Нижняя треть: создание / звонок ————— */
+  .actions.single { grid-template-columns: 1fr; }
+  .create { width: 100%; }
+  .create .act-icon { color: #0b0b0d; }
+
+  body.light .arow { border-bottom-color: rgba(20, 24, 12, .07); }
+  body.light .arow:active { background: rgba(20, 24, 12, .05); }
 
   /* ————— Шторка настроек ————— */
   .sheet.tall { height: 88vh; max-height: 88vh; }
@@ -839,7 +943,12 @@
   <section class="display">
     <div class="statusline">
       <span class="dot" aria-hidden="true"></span>
-      <span id="statusText">Будильник выключен</span>
+      <span id="statusText">Будильников нет</span>
+      <button class="power" id="addBtn" type="button" aria-label="Новый будильник">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
       <button class="power gear" id="gearBtn" type="button" aria-label="Настройки">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 7h10M18 7h2M4 17h2M10 17h10"/>
@@ -847,79 +956,37 @@
           <circle cx="8" cy="17" r="2"/>
         </svg>
       </button>
-      <button class="power" id="powerBtn" type="button" aria-label="Включить или отключить будильник">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <path d="M12 3v9"/>
-          <path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>
-        </svg>
-      </button>
     </div>
 
     <div class="timeblock">
-      <button class="time" id="timeBtn" type="button" aria-label="Изменить время будильника">07:30</button>
+      <button class="time" id="timeBtn" type="button" aria-label="Настроить будильник">--:--</button>
       <div class="meta">
-        <span id="nowText">--:--</span>
-        <span class="mid" aria-hidden="true"></span>
-        <span id="nextText">нажмите, чтобы настроить</span>
+        <span id="nowText" hidden>--:--</span>
+        <span class="mid" id="metaMid" hidden aria-hidden="true"></span>
+        <span id="nextText">нажмите «+», чтобы создать</span>
       </div>
     </div>
   </section>
 
   <section class="settings">
     <div class="card" id="card">
-      <button class="row" id="soundRow" type="button">
-        <span class="icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 18V6l10-2v12"/>
-            <circle cx="6" cy="18" r="3"/>
-            <circle cx="16" cy="16" r="3"/>
-          </svg>
-        </span>
-        <span class="labels">
-          <span class="label">Звук будильника</span>
-          <span class="value" id="soundValue">По умолчанию</span>
-        </span>
-        <span class="chev" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M9 6l6 6-6 6"/>
-          </svg>
-        </span>
-      </button>
-
-      <div class="sep"></div>
-
-      <div class="row static">
-        <span class="icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 2l4 4-4 4"/>
-            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-            <path d="M7 22l-4-4 4-4"/>
-            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-          </svg>
-        </span>
-        <span class="labels">
-          <span class="label">Повторять</span>
-          <span class="value" id="repeatValue">Каждый день</span>
-        </span>
-        <button class="switch" id="repeatSwitch" type="button" role="switch" aria-checked="true" aria-label="Повторять будильник">
-          <span></span>
-        </button>
-      </div>
-
-      <div class="daysrow" id="daysRow" role="group" aria-label="Дни недели">
-        <button class="day" type="button" data-day="0">Пн</button>
-        <button class="day" type="button" data-day="1">Вт</button>
-        <button class="day" type="button" data-day="2">Ср</button>
-        <button class="day" type="button" data-day="3">Чт</button>
-        <button class="day" type="button" data-day="4">Пт</button>
-        <button class="day weekend" type="button" data-day="5">Сб</button>
-        <button class="day weekend" type="button" data-day="6">Вс</button>
-      </div>
+      <div class="alist" id="alarmList"></div>
+      <div class="alist-empty" id="emptyHint">Нажмите «+», чтобы создать будильник</div>
     </div>
   </section>
 
-  <section class="actions">
-    <button class="action snooze" id="snoozeBtn" type="button">
+  <section class="actions single">
+    <button class="action snooze create" id="createBtn" type="button">
+      <span class="act-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      </span>
+      <span class="action-title">Создать будильник</span>
+      <span class="action-sub" id="createSub">до 15 будильников</span>
+    </button>
+
+    <button class="action snooze" id="snoozeBtn" type="button" hidden>
       <span class="act-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/>
@@ -930,7 +997,7 @@
       <span class="action-sub" id="snoozeSub">Отложить на 10 минут</span>
     </button>
 
-    <button class="action disable" id="disableBtn" type="button">
+    <button class="action disable" id="disableBtn" type="button" hidden>
       <span class="act-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="M12 3v9"/>
@@ -967,20 +1034,45 @@
   </div>
 </div>
 
-<!-- Время -->
-<div class="overlay" id="timeOverlay" aria-hidden="true">
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="timeTitle">
+<!-- Редактор будильника -->
+<div class="overlay" id="alarmOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="alarmTitle">
     <div class="grabber"></div>
     <div class="sheet-head">
-      <h2 id="timeTitle">Время будильника</h2>
-      <button class="close" type="button" data-close="time" aria-label="Закрыть">
+      <h2 id="alarmTitle">Будильник</h2>
+      <button class="close" type="button" data-close="alarm" aria-label="Закрыть">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <input class="time-input" id="timeInput" type="time" step="60" aria-label="Время будильника">
+    <div class="sheet-scroll">
+      <input class="time-input" id="timeInput" type="time" step="60" aria-label="Время будильника">
+
+      <div class="set">
+        <div class="set-head nomargin">
+          <span class="set-title">Повторять</span>
+          <button class="switch" id="repeatSwitch" type="button" role="switch" aria-checked="true" aria-label="Повторять будильник">
+            <span></span>
+          </button>
+        </div>
+      </div>
+      <div class="daysrow" id="daysRow" role="group" aria-label="Дни недели">
+        <button class="day" type="button" data-day="0">Пн</button>
+        <button class="day" type="button" data-day="1">Вт</button>
+        <button class="day" type="button" data-day="2">Ср</button>
+        <button class="day" type="button" data-day="3">Чт</button>
+        <button class="day" type="button" data-day="4">Пт</button>
+        <button class="day weekend" type="button" data-day="5">Сб</button>
+        <button class="day weekend" type="button" data-day="6">Вс</button>
+      </div>
+
+      <div class="set">
+        <div class="set-head"><span class="set-title">Название</span></div>
+        <input class="text-input" id="labelInput" type="text" maxlength="24" placeholder="Например, «Работа»" autocomplete="off">
+      </div>
+    </div>
     <div class="sheet-actions">
-      <button class="btn btn-ghost" type="button" data-close="time">Отмена</button>
-      <button class="btn btn-primary" type="button" id="timeSave">Готово</button>
+      <button class="btn btn-danger" type="button" id="deleteAlarmBtn" hidden>Удалить</button>
+      <button class="btn btn-primary" type="button" id="alarmSave">Готово</button>
     </div>
   </div>
 </div>
@@ -1028,19 +1120,20 @@
         <div class="set-hint">Тема применяется и к экрану звонка.</div>
       </div>
 
-      <div class="group-title">Будильник</div>
-      <div class="set">
-        <div class="set-head"><span class="set-title">Название</span></div>
-        <input class="text-input" id="labelInput" type="text" maxlength="24" placeholder="Например, «Работа»" autocomplete="off">
-      </div>
-      <div class="set">
-        <div class="set-head nomargin">
-          <span class="set-title">Вибрация</span>
-          <button class="switch" id="vibrateSwitch" type="button" role="switch" aria-checked="true" aria-label="Вибрация"><span></span></button>
-        </div>
-      </div>
-
       <div class="group-title">Звук</div>
+      <div class="set">
+        <button class="setrow" id="soundRow" type="button">
+          <span class="labels">
+            <span class="set-title">Звук будильника</span>
+            <span class="set-hint" id="soundValue">По умолчанию</span>
+          </span>
+          <span class="chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+          </span>
+        </button>
+      </div>
       <div class="set">
         <div class="set-head">
           <span class="set-title">Громкость</span>
@@ -1095,6 +1188,12 @@
       <div class="group-title">Отключение</div>
       <div class="set">
         <div class="set-head nomargin">
+          <span class="set-title">Вибрация</span>
+          <button class="switch" id="vibrateSwitch" type="button" role="switch" aria-checked="true" aria-label="Вибрация"><span></span></button>
+        </div>
+      </div>
+      <div class="set">
+        <div class="set-head nomargin">
           <span class="set-title">Решить пример</span>
           <button class="switch" id="challengeSwitch" type="button" role="switch" aria-checked="false" aria-label="Решить пример для отключения"><span></span></button>
         </div>
@@ -1113,11 +1212,8 @@
 
       <div class="group-title">Действия</div>
       <div class="set">
-        <div class="btn-row">
-          <button class="btn-sm" id="skipBtn" type="button">Пропустить ближайший</button>
-          <button class="btn-sm" id="testBtn" type="button">Проверить звонок</button>
-        </div>
-        <div class="set-hint" id="skipHint"></div>
+        <button class="btn-sm" id="testBtn" type="button">Проверить звонок</button>
+        <div class="set-hint">Пробный звонок: проверьте звук и громкость. Расписание не меняет.</div>
       </div>
 
       <div id="healthGroup">

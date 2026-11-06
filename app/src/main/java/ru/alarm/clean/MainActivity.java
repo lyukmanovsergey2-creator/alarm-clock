@@ -139,29 +139,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        /* После перезагрузки телефона будильник мог не восстановиться через BootReceiver.
-           Проверяем при возврате на главный экран и переустанавливаем при необходимости. */
+        /* После перезагрузки телефона будильники могли не восстановиться через BootReceiver.
+           Проверяем при возврате на главный экран и переустанавливаем при необходимости
+           (restore сам дозвонит пропущенные срабатывания и восстановит отложенный звонок). */
         try {
-            SharedPreferences prefs = AlarmScheduler.prefs(this);
-            boolean enabled = prefs.getBoolean("enabled", false);
-            long triggerAt = prefs.getLong("triggerAt", 0);
-            long now = System.currentTimeMillis();
-            if (enabled && triggerAt > 0 && triggerAt > now) {
-                AlarmScheduler.scheduleFromPrefs(this);
-                AlarmScheduler.logLine(this, "onResume: будильник заново поставлен (" + (triggerAt - now) / 60000 + " мин)");
-            } else if (enabled && triggerAt > 0 && triggerAt <= now
-                    && now - triggerAt <= AlarmScheduler.MISSED_WINDOW_MS
-                    && !AlarmService.running) {
-                /* Разблокировка пришла недавно после пропущенного звонка —
-                   дозвоним сразу, не дожидаясь позднего BOOT_COMPLETED. */
-                AlarmScheduler.logLine(this, "onResume: пропущен " + (now - triggerAt) / 1000
-                        + " с назад — дозвон");
-                try {
-                    AlarmService.start(this, prefs.getString("soundUri", ""), false);
-                } catch (Exception exception) {
-                    AlarmScheduler.logLine(this, "onResume: дозвон не удался: " + exception);
-                }
-            }
+            AlarmScheduler.migrateToDeviceProtected(this);
+            AlarmScheduler.restore(this, "onResume");
         } catch (Exception ignored) {
         }
 

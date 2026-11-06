@@ -32,6 +32,7 @@ public class AlarmService extends Service {
     static final String ACTION_SILENCE = "ru.alarm.clean.SILENCE";
     static final String EXTRA_SOUND = "sound";
     static final String EXTRA_TEST = "test";
+    static final String EXTRA_ALARM_ID = AlarmScheduler.EXTRA_ALARM_ID;
 
     private static final String CHANNEL_ID = "alarm_channel";
     private static final int NOTIFICATION_ID = 42;
@@ -39,6 +40,8 @@ public class AlarmService extends Service {
     static volatile boolean running = false;
     /** Пробный звонок из настроек: не трогает реальное расписание. */
     static volatile boolean testing = false;
+    /** Какой будильник сейчас звонит (id) — -1, если звонка нет. */
+    static volatile int currentAlarmId = -1;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private int originalVolume = -1;
@@ -53,11 +56,12 @@ public class AlarmService extends Service {
        а minSdk приложения — 23. */
     private Object focusRequest;
 
-    static void start(Context context, String soundUri, boolean test) {
+    static void start(Context context, String soundUri, boolean test, int alarmId) {
         Intent intent = new Intent(context, AlarmService.class);
         intent.setAction(ACTION_START);
         intent.putExtra(EXTRA_SOUND, soundUri == null ? "" : soundUri);
         intent.putExtra(EXTRA_TEST, test);
+        intent.putExtra(EXTRA_ALARM_ID, alarmId);
         if (Build.VERSION.SDK_INT >= 26) {
             context.startForegroundService(intent);
         } else {
@@ -82,21 +86,29 @@ public class AlarmService extends Service {
         if (action == null) {
             action = ACTION_START;
         }
+        SharedPreferences prefs = AlarmScheduler.prefs(this);
+        /* id звонящего будильника: из extra, иначе — текущий (для кнопок шторки,
+           которые не передают id). */
+        int id = intent != null ? intent.getIntExtra(EXTRA_ALARM_ID, currentAlarmId) : currentAlarmId;
+        if (ACTION_START.equals(action) && id >= 0) {
+            currentAlarmId = id;
+        }
 
         if (ACTION_SNOOZE.equals(action)) {
-            SharedPreferences prefs = AlarmScheduler.prefs(this);
-            if (!testing) {
+            if (!testing && id >= 0) {
                 int max = prefs.getInt("maxSnoozes", 0);
-                int count = prefs.getInt("snoozeCount", 0);
+                int count = prefs.getInt(AlarmScheduler.key(id, "snoozeCount"), 0);
                 if (max > 0 && count >= max) {
                     /* лимит исчерпан — продолжаем звонить */
                     return START_NOT_STICKY;
                 }
                 int minutes = Math.max(1, Math.min(120, prefs.getInt("snoozeMinutes", 10)));
-                AlarmScheduler.scheduleSnooze(this,
-                        System.currentTimeMillis() + minutes * 60000L,
-                        prefs.getString("soundUri", ""));
-                prefs.edit().putInt("snoozeCount", count + 1).apply();
+                long snoozeAt = System.currentTimeMillis() + minutes * 60000L;
+                AlarmScheduler.scheduleSnooze(this, id, snoozeAt);
+                prefs.edit()
+                        .putInt(AlarmScheduler.key(id, "snoozeCount"), count + 1)
+                        .putString(AlarmScheduler.key(id, "snoozeSound"), prefs.getString("soundUri", ""))
+                        .apply();
             }
             stopRinging();
             stopSelf();
@@ -104,8 +116,9 @@ public class AlarmService extends Service {
         }
 
         if (ACTION_DISABLE.equals(action)) {
-            if (!testing) {
-                AlarmScheduler.cancelAll(this);
+            if (!testing && id >= 0) {
+                /* «Совсем» из шторки: тот же путь, что и кнопка на экране звонка. */
+                AlarmScheduler.disableForever(this, id);
             }
             stopRinging();
             stopSelf();
@@ -121,7 +134,7 @@ public class AlarmService extends Service {
         String soundUri = intent != null ? intent.getStringExtra(EXTRA_SOUND) : "";
         testing = intent != null && intent.getBooleanExtra(EXTRA_TEST, false);
         handler.removeCallbacksAndMessages(null);
-        Notification notification = buildNotification(soundUri);
+        Notification notification = buildNotification(soundUri, id);
 
         if (Build.VERSION.SDK_INT >= 29) {
             startForeground(NOTIFICATION_ID, notification,
@@ -130,7 +143,7 @@ public class AlarmService extends Service {
             startForeground(NOTIFICATION_ID, notification);
         }
 
-        SharedPreferences cfg = AlarmScheduler.prefs(this);
+        SharedPreferences cfg = prefs;
         applyAlarmVolume(cfg.getInt("volume", 0));
         playSound(soundUri);
         startFadeIn(cfg.getInt("fadeSeconds", 0));
@@ -139,7 +152,7 @@ public class AlarmService extends Service {
             startVibrating();
         }
         requestAudioFocus();
-        launchRingActivity(soundUri);
+        launchRingActivity(soundUri, id);
         scheduleAutoStop(cfg.getInt("autoStopMinutes", 10));
 
         return START_NOT_STICKY;
@@ -163,29 +176,33 @@ public class AlarmService extends Service {
         manager.createNotificationChannel(channel);
     }
 
-    private Notification buildNotification(String soundUri) {
+    private Notification buildNotification(String soundUri, int id) {
         Intent ringIntent = new Intent(this, RingActivity.class);
         ringIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                 | Intent.FLAG_ACTIVITY_CLEAR_TOP
                 | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         ringIntent.putExtra(EXTRA_SOUND, soundUri);
+        ringIntent.putExtra(EXTRA_ALARM_ID, id);
         PendingIntent fullScreenIntent = PendingIntent.getActivity(this, 10, ringIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent snoozeIntent = new Intent(this, AlarmService.class);
         snoozeIntent.setAction(ACTION_SNOOZE);
+        snoozeIntent.putExtra(EXTRA_ALARM_ID, id);
         PendingIntent snoozePending = PendingIntent.getService(this, 21, snoozeIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent disableIntent = new Intent(this, AlarmService.class);
         disableIntent.setAction(ACTION_DISABLE);
+        disableIntent.putExtra(EXTRA_ALARM_ID, id);
         PendingIntent disablePending = PendingIntent.getService(this, 22, disableIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         SharedPreferences cfg = AlarmScheduler.prefs(this);
-        String label = cfg.getString("label", "");
+        String label = id >= 0 ? cfg.getString(AlarmScheduler.key(id, "label"), "") : "";
         int max = cfg.getInt("maxSnoozes", 0);
-        boolean canSnooze = testing || max <= 0 || cfg.getInt("snoozeCount", 0) < max;
+        boolean canSnooze = testing || max <= 0
+                || (id >= 0 && cfg.getInt(AlarmScheduler.key(id, "snoozeCount"), 0) < max);
         boolean challenge = cfg.getBoolean("challenge", false) && !testing;
         int minutes = Math.max(1, Math.min(120, cfg.getInt("snoozeMinutes", 10)));
 
@@ -438,13 +455,14 @@ public class AlarmService extends Service {
         }
     }
 
-    private void launchRingActivity(String soundUri) {
+    private void launchRingActivity(String soundUri, int id) {
         try {
             Intent intent = new Intent(this, RingActivity.class);
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                     | Intent.FLAG_ACTIVITY_CLEAR_TOP
                     | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             intent.putExtra(EXTRA_SOUND, soundUri);
+            intent.putExtra(EXTRA_ALARM_ID, id);
             startActivity(intent);
         } catch (Exception ignored) {
             /* На некоторых версиях Android запуск из фона запрещён —
@@ -508,6 +526,7 @@ public class AlarmService extends Service {
         stopRinging();
         running = false;
         testing = false;
+        currentAlarmId = -1;
         super.onDestroy();
     }
 
