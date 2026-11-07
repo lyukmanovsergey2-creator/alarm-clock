@@ -465,7 +465,7 @@
     /* Тап по корзине удаляет — если строка приоткрыта свайпом */
     del.addEventListener('click', function (event) {
       event.stopPropagation();
-      if (openSwipe && openSwipe.row === row) removeAlarmById(a.id);
+      if (openSwipe && openSwipe.row === row) removeAlarmById(a.id, row);
     });
 
     content.addEventListener('click', function () {
@@ -589,7 +589,7 @@
       if (shifted >= SW_DELETE) {
         /* доведён до отметки удаления или дальше — удаляем */
         openSwipe = null;
-        removeAlarmById(id);
+        removeAlarmById(id, row);
         return;
       }
       if (shifted >= SW_APPEAR) {
@@ -621,8 +621,10 @@
     if (openSwipe.row && !openSwipe.row.contains(target)) closeOpenSwipe();
   }, { capture: true, passive: true });
 
-  /* Удаление будильника по id: из свайпа или из редактора */
-  function removeAlarmById(id) {
+  /* Удаление будильника по id: из свайпа или из редактора.
+     Если передана строка (rowEl) — перед перестройкой списка строка
+     плавно уезжает за край и схлопывается по высоте. */
+  function removeAlarmById(id, rowEl) {
     swiping = false; /* жест завершён — список можно перестроить сразу */
     var idx = -1;
     for (var i = 0; i < state.alarms.length; i++) {
@@ -642,8 +644,29 @@
       closeSheet(alarmOverlay);
     }
     saveState();
-    render();
     pushState();
+
+    /* Плавный уход строки: содержимое доезжает за край, высота схлопывается,
+       только потом перестраиваем список */
+    if (rowEl && rowEl.parentNode) {
+      content = rowEl._content;
+      if (content) {
+        content.style.transition = 'transform .24s ease';
+        content.style.transform = 'translateX(-' + Math.round(window.innerWidth * 1.05) + 'px)';
+      }
+      rowEl.style.transition = 'max-height .3s ease .12s, opacity .3s ease .12s';
+      rowEl.style.maxHeight = rowEl.offsetHeight + 'px';
+      void rowEl.offsetHeight; /* фиксируем текущую высоту, чтобы анимация пошла */
+      rowEl.style.maxHeight = '0px';
+      rowEl.style.opacity = '0';
+      swiping = true; /* пока анимация — не мешаем лишней перестройкой списка */
+      setTimeout(function () {
+        swiping = false;
+        render();
+      }, 440);
+    } else {
+      render();
+    }
     toast('Будильник удалён');
   }
 
