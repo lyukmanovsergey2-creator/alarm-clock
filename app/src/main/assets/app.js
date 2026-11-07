@@ -462,10 +462,11 @@
     row.appendChild(content);
     row._content = content;
 
-    /* Тап по корзине удаляет — если строка приоткрыта свайпом */
+    /* Тап по корзине удаляет — если строка приоткрыта свайпом.
+       (Основа удаления — touchend в attachSwipe; click здесь — резерв.) */
     del.addEventListener('click', function (event) {
       event.stopPropagation();
-      if (openSwipe && openSwipe.row === row) removeAlarmById(a.id, row);
+      removeAlarmById(a.id, row);
     });
 
     content.addEventListener('click', function () {
@@ -476,7 +477,7 @@
       openEditor(a.id);
     });
 
-    attachSwipe(row, a.id);
+    attachSwipe(row, a.id, sw);
     return row;
   }
 
@@ -506,7 +507,7 @@
      • тап по корзине в приоткрытой строке — удалить, тап мимо — вернуть строку. */
   var SW_APPEAR = 0.16;  /* зона полностью проявилась */
   var SW_FADE_FROM = 0.08; /* начало проявления */
-  var SW_DELETE = 0.53;  /* порог удаления */
+  var SW_DELETE = 0.55;  /* порог удаления: тумблер в левой трети строки */
 
   /* Сдвиг строки: animate — с плавным возвратом.
      При живом драге (animate=false) у кнопки отключаем transition,
@@ -541,7 +542,7 @@
     setTimeout(function () { row._suppress = false; }, 350);
   }
 
-  function attachSwipe(row, id) {
+  function attachSwipe(row, id, sw) {
     var startX = 0, startY = 0, baseOffset = 0;
     var tracking = false, decided = false, horizontal = false, moved = 0;
 
@@ -550,14 +551,18 @@
       if (anySheetOpen()) return;
       /* Свайп по другой строке — сначала убрать открытую */
       if (openSwipe && openSwipe.row !== row) closeOpenSwipe();
+      /* Тумблер — зона тапа: свайп с него не начинаем,
+         чтобы click по нему всегда доходил и переключал будильник */
+      if (sw && (event.target === sw || sw.contains(event.target))) return;
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       baseOffset = row._offset || 0;
       tracking = true;
-      swiping = true;
       decided = false;
       horizontal = false;
       moved = 0;
+      /* ВАЖНО: swiping здесь НЕ ставим — иначе простой тап заблокирует
+         перерисовку списка и тумблер/кнопки визуально «умрут» */
     }, { capture: true, passive: true });
 
     row.addEventListener('touchmove', function (event) {
@@ -569,8 +574,9 @@
         decided = true;
         horizontal = Math.abs(dx) > Math.abs(dy);
         if (!horizontal) { tracking = false; return; }
+        /* реальные горизонтальный драг начался — блокируем перерисовку */
+        swiping = true;
       }
-      if (!horizontal) return;
       moved = Math.max(moved, Math.abs(dx));
       /* Только влево; ширина — по экрану */
       var cap = -Math.round(window.innerWidth * 0.87);
@@ -585,20 +591,28 @@
     row.addEventListener('touchend', function (event) {
       if (!tracking) return;
       tracking = false;
-      /* с маленькой задержкой: даём анимациям отработать без перерисовки */
-      setTimeout(function () { swiping = false; }, 260);
-      if (moved > 10) suppressClick(row);
-      /* Финальное направление жеста: удалять можно только когда палец
-         в конце ехал влево (возвратный свайп вправо — отмена, не удаление). */
-      var finishDx = 0;
-      if (event.changedTouches && event.changedTouches.length) {
-        finishDx = event.changedTouches[0].clientX - startX;
+      if (moved > 10) {
+        suppressClick(row);
+        /* с маленькой задержкой: даём анимациям отработать без перерисовки */
+        setTimeout(function () { swiping = false; }, 260);
+      } else {
+        swiping = false;
       }
-      var backward = finishDx > 30; /* явно возвращался вправо */
+      /* Короткий тап по корзине — удалить напрямую, не полагаясь на click
+         (preventDefault в touchmove может глушить генерацию click) */
+      if (moved <= 10 && row._del
+          && (event.target === row._del || row._del.contains(event.target))
+          && openSwipe && openSwipe.row === row) {
+        openSwipe = null;
+        removeAlarmById(id, row);
+        return;
+      }
+      /* Удаление по ПОЛОЖЕНИЮ в момент отпускания: тумблер доведён
+         до левой трети (зелёная зона) и палец отпущен — удаляем сразу,
+         без анализа направления финального движения */
       var offset = row._offset || 0;
       var shifted = -Math.min(offset, 0) / window.innerWidth;
-      if (!backward && shifted >= SW_DELETE && finishDx <= -30) {
-        /* доведён до отметки удаления или дальше движением влево — удаляем */
+      if (shifted >= SW_DELETE) {
         openSwipe = null;
         removeAlarmById(id, row);
         return;
@@ -616,12 +630,11 @@
 
     /* Система прервала жест — вернуть строку и снять блокировку рендера */
     row.addEventListener('touchcancel', function () {
-      if (!tracking) { swiping = false; return; }
       tracking = false;
+      swiping = false;
       row._offset = 0;
       setRowOffset(row, 0, true);
       if (openSwipe && openSwipe.row === row) openSwipe = null;
-      setTimeout(function () { swiping = false; }, 260);
     }, { capture: true, passive: true });
   }
 
