@@ -545,18 +545,17 @@
   function attachSwipe(row, id, sw) {
     var startX = 0, startY = 0, baseOffset = 0;
     var tracking = false, decided = false, horizontal = false, moved = 0;
+    var onSwitch = false; /* жест начался на тумблере */
 
     row.addEventListener('touchstart', function (event) {
       if (event.touches.length !== 1) return;
       if (anySheetOpen()) return;
       /* Свайп по другой строке — сначала убрать открытую */
       if (openSwipe && openSwipe.row !== row) closeOpenSwipe();
-      /* Тумблер — зона тапа: свайп с него не начинаем,
-         чтобы click по нему всегда доходил и переключал будильник */
-      if (sw && (event.target === sw || sw.contains(event.target))) return;
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       baseOffset = row._offset || 0;
+      onSwitch = !!(sw && (event.target === sw || sw.contains(event.target)));
       tracking = true;
       decided = false;
       horizontal = false;
@@ -570,7 +569,9 @@
       var dx = event.touches[0].clientX - startX;
       var dy = event.touches[0].clientY - startY;
       if (!decided) {
-        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        /* с тумблера свайп начинается чуть позже — чтобы тап не дёргал строку */
+        var edge = onSwitch ? 14 : 8;
+        if (Math.abs(dx) < edge && Math.abs(dy) < edge) return;
         decided = true;
         horizontal = Math.abs(dx) > Math.abs(dy);
         if (!horizontal) { tracking = false; return; }
@@ -597,6 +598,20 @@
         setTimeout(function () { swiping = false; }, 260);
       } else {
         swiping = false;
+      }
+      /* Короткий тап по тумблеру — переключаем будильник напрямую,
+         не полагаясь на click (свайп теперь может начинаться с тумблера,
+         и preventDefault в touchmove иногда глушит click) */
+      if (onSwitch && moved < 16) {
+        swiping = false;
+        row._offset = 0;
+        setRowOffset(row, 0, true);
+        suppressClick(row);
+        if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
+        /* переключаем следующим тиком: синтетический click успеет погаситься
+           на этой же строке и не попадёт в только что перерисованную */
+        setTimeout(function () { toggleAlarm(id); }, 0);
+        return;
       }
       /* Короткий тап по корзине — удалить напрямую, не полагаясь на click
          (preventDefault в touchmove может глушить генерацию click) */
