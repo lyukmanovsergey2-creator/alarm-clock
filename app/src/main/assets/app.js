@@ -673,21 +673,27 @@
     /* Плавный уход строки: содержимое доезжает за край, высота схлопывается,
        только потом перестраиваем список */
     if (rowEl && rowEl.parentNode) {
-      content = rowEl._content;
-      if (content) {
-        content.style.transition = 'transform .24s ease';
-        content.style.transform = 'translateX(-' + Math.round(window.innerWidth * 1.05) + 'px)';
-      }
-      rowEl.style.transition = 'max-height .3s ease .12s, opacity .3s ease .12s';
-      rowEl.style.maxHeight = rowEl.offsetHeight + 'px';
-      void rowEl.offsetHeight; /* фиксируем текущую высоту, чтобы анимация пошла */
-      rowEl.style.maxHeight = '0px';
-      rowEl.style.opacity = '0';
-      swiping = true; /* пока анимация — не мешаем лишней перестройкой списка */
-      setTimeout(function () {
+      try {
+        var content = rowEl._content;
+        if (content) {
+          content.style.transition = 'transform .24s ease';
+          content.style.transform = 'translateX(-' + Math.round(window.innerWidth * 1.05) + 'px)';
+        }
+        rowEl.style.transition = 'max-height .3s ease .12s, opacity .3s ease .12s';
+        rowEl.style.maxHeight = rowEl.offsetHeight + 'px';
+        void rowEl.offsetHeight; /* фиксируем текущую высоту, чтобы анимация пошла */
+        rowEl.style.maxHeight = '0px';
+        rowEl.style.opacity = '0';
+        swiping = true; /* пока анимация — не мешаем лишней перестройкой списка */
+        setTimeout(function () {
+          swiping = false;
+          render();
+        }, 440);
+      } catch (e) {
+        /* любая ошибка анимации не должна оставлять список не перерисованным */
         swiping = false;
         render();
-      }, 440);
+      }
     } else {
       render();
     }
