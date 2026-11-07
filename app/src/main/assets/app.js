@@ -63,6 +63,7 @@
   /* Рабочая копия сигнализации в редакторе */
   var editAlarm = null;
   var openSwipe = null; /* открытая строка (свайп-удаление) */
+  var suppressTapUntil = 0; /* после тапа по тумблеру гасим синтетические клики */
   var swiping = false;  /* активный жест свайпа — рендер списка отложен */
 
   var bridge = window.NativeAlarm || null;
@@ -452,6 +453,7 @@
     sw.appendChild(document.createElement('span'));
     sw.addEventListener('click', function (event) {
       event.stopPropagation();
+      if (Date.now() < suppressTapUntil) return;
       /* приоткрытая строка: любой тап по ней — отмена удаления */
       if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
       if (row._suppress) return;
@@ -470,6 +472,7 @@
     });
 
     content.addEventListener('click', function () {
+      if (Date.now() < suppressTapUntil) return;
       /* Тап по приоткрытой строке — отмена удаления (проверка до suppress,
          иначе тап не закрыл бы строку и после драга) */
       if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
@@ -501,10 +504,8 @@
 
   /* Пороги свайпа — в долях ширины экрана (по опыту пользователя):
      • зона удаления проявляется, когда тумблер доходит до отметки (~0.16 W);
-     • отпускание дальше отметки удаления (~0.53 W) — удаляет будильник;
-     • отпускание раньше отметки — строка остаётся приоткрытой на этом месте;
-     • отпускание до отметки появления — строка возвращается в исходное;
-     • тап по корзине в приоткрытой строке — удалить, тап мимо — вернуть строку. */
+     • отпускание дальше отметки удаления (~0.55 W) — удаляет будильник;
+     • отпускание вне зелёной зоны — строка плавно возвращается на место. */
   var SW_APPEAR = 0.16;  /* зона полностью проявилась */
   var SW_FADE_FROM = 0.08; /* начало проявления */
   var SW_DELETE = 0.55;  /* порог удаления: тумблер в левой трети строки */
@@ -570,7 +571,7 @@
       var dy = event.touches[0].clientY - startY;
       if (!decided) {
         /* с тумблера свайп начинается чуть позже — чтобы тап не дёргал строку */
-        var edge = onSwitch ? 14 : 8;
+        var edge = onSwitch ? 18 : 8;
         if (Math.abs(dx) < edge && Math.abs(dy) < edge) return;
         decided = true;
         horizontal = Math.abs(dx) > Math.abs(dy);
@@ -599,27 +600,17 @@
       } else {
         swiping = false;
       }
-      /* Короткий тап по тумблеру — переключаем будильник напрямую,
-         не полагаясь на click (свайп теперь может начинаться с тумблера,
-         и preventDefault в touchmove иногда глушит click) */
-      if (onSwitch && moved < 16) {
+      /* Короткий тап по тумблеру (драг так и не начался) — переключаем
+         будильник напрямую, не полагаясь на click */
+      if (onSwitch && !decided) {
         swiping = false;
         row._offset = 0;
         setRowOffset(row, 0, true);
         suppressClick(row);
-        if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
+        suppressTapUntil = Date.now() + 450;
         /* переключаем следующим тиком: синтетический click успеет погаситься
            на этой же строке и не попадёт в только что перерисованную */
         setTimeout(function () { toggleAlarm(id); }, 0);
-        return;
-      }
-      /* Короткий тап по корзине — удалить напрямую, не полагаясь на click
-         (preventDefault в touchmove может глушить генерацию click) */
-      if (moved <= 10 && row._del
-          && (event.target === row._del || row._del.contains(event.target))
-          && openSwipe && openSwipe.row === row) {
-        openSwipe = null;
-        removeAlarmById(id, row);
         return;
       }
       /* Удаление по ПОЛОЖЕНИЮ в момент отпускания: тумблер доведён
@@ -632,15 +623,11 @@
         removeAlarmById(id, row);
         return;
       }
-      if (shifted >= SW_APPEAR) {
-        /* остаётся на месте, где отпустили; корзина видна, решение за тапом */
-        openSwipe = { row: row };
-        return;
-      }
-      /* не дошёл до отметки появления — возвращается сам, открытая отмена */
+      /* Отпущено вне зелёной зоны — строка плавно возвращается на место,
+         промежуточного «приоткрытого» состояния нет */
       row._offset = 0;
       setRowOffset(row, 0, true);
-      if (openSwipe && openSwipe.row === row) openSwipe = null;
+      openSwipe = null;
     }, { capture: true, passive: true });
 
     /* Система прервала жест — вернуть строку и снять блокировку рендера */

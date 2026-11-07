@@ -10,7 +10,7 @@ SRC="$ROOT/app/src/main"
 BUILD="$ROOT/build"
 ANDROID_JAR="${ANDROID_JAR:-$HOME/android.jar}"
 DX="${DX:-$(command -v d8 || command -v dx || echo /home/opencode/bt34/d8)}"
-VERSION_CODE="${VERSION_CODE:-19}"
+VERSION_CODE="${VERSION_CODE:-20}"
 VERSION_NAME="${VERSION_NAME:-2.10}"
 OUT="${OUT:-$ROOT/AlarmClock.apk}"
 
