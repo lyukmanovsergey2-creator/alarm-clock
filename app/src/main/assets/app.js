@@ -469,9 +469,10 @@
     });
 
     content.addEventListener('click', function () {
-      if (row._suppress) return; /* сразу после драга — клики игнорируем */
-      /* Тап по приоткрытой строке — отмена удаления */
+      /* Тап по приоткрытой строке — отмена удаления (проверка до suppress,
+         иначе тап не закрыл бы строку и после драга) */
       if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
+      if (row._suppress) return; /* сразу после драга — клики игнорируем */
       openEditor(a.id);
     });
 
@@ -543,10 +544,6 @@
   function attachSwipe(row, id) {
     var startX = 0, startY = 0, baseOffset = 0;
     var tracking = false, decided = false, horizontal = false, moved = 0;
-    /* deleteArm: удаление при отпускании разрешено только когда жест ехал
-       влево (или при дожатии уже открытой строки влево). Свайп вправо
-       (возврат) удаление отменяет — строка просто вернётся/останется. */
-    var deleteArm = false;
 
     row.addEventListener('touchstart', function (event) {
       if (event.touches.length !== 1) return;
@@ -556,7 +553,6 @@
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       baseOffset = row._offset || 0;
-      deleteArm = baseOffset < 0; /* открытая строка: тянешь дальше влево — можно удалить */
       tracking = true;
       swiping = true;
       decided = false;
@@ -581,24 +577,28 @@
       var target = baseOffset + dx;
       if (target > 0) target = 0;
       if (target < cap) target = cap;
-      /* направление относительно исходного места строки */
-      if (target > baseOffset + 2) deleteArm = false;
-      else if (target < baseOffset - 2) deleteArm = true;
       row._offset = target;
       setRowOffset(row, target, false);
       if (event.cancelable) event.preventDefault();
     }, { passive: false });
 
-    row.addEventListener('touchend', function () {
+    row.addEventListener('touchend', function (event) {
       if (!tracking) return;
       tracking = false;
       /* с маленькой задержкой: даём анимациям отработать без перерисовки */
       setTimeout(function () { swiping = false; }, 260);
       if (moved > 10) suppressClick(row);
+      /* Финальное направление жеста: удалять можно только когда палец
+         в конце ехал влево (возвратный свайп вправо — отмена, не удаление). */
+      var finishDx = 0;
+      if (event.changedTouches && event.changedTouches.length) {
+        finishDx = event.changedTouches[0].clientX - startX;
+      }
+      var backward = finishDx > 30; /* явно возвращался вправо */
       var offset = row._offset || 0;
       var shifted = -Math.min(offset, 0) / window.innerWidth;
-      if (shifted >= SW_DELETE && deleteArm) {
-        /* доведён до отметки удаления или дальше жестом влево — удаляем */
+      if (!backward && shifted >= SW_DELETE && finishDx <= -30) {
+        /* доведён до отметки удаления или дальше движением влево — удаляем */
         openSwipe = null;
         removeAlarmById(id, row);
         return;
