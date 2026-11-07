@@ -507,7 +507,9 @@
   var SW_FADE_FROM = 0.08; /* начало проявления */
   var SW_DELETE = 0.53;  /* порог удаления */
 
-  /* Сдвиг строки: animate — с плавным возвратом */
+  /* Сдвиг строки: animate — с плавным возвратом.
+     При живом драге (animate=false) у кнопки отключаем transition,
+     иначе она отстаёт от пальца и дёргается при обратном свайпе. */
   function setRowOffset(row, offset, animate) {
     var content = row._content;
     if (!content) return;
@@ -515,6 +517,7 @@
     content.style.willChange = 'transform';
     content.style.transform = 'translateX(' + offset + 'px)';
     if (row._del) {
+      row._del.style.transition = animate ? '' : 'none';
       var shifted = Math.abs(Math.min(offset, 0)) / window.innerWidth;
       var span = SW_APPEAR - SW_FADE_FROM;
       var reveal = Math.max(0, Math.min(1, (shifted - SW_FADE_FROM) / (span > 0 ? span : 0.08)));
@@ -540,6 +543,10 @@
   function attachSwipe(row, id) {
     var startX = 0, startY = 0, baseOffset = 0;
     var tracking = false, decided = false, horizontal = false, moved = 0;
+    /* deleteArm: удаление при отпускании разрешено только когда жест ехал
+       влево (или при дожатии уже открытой строки влево). Свайп вправо
+       (возврат) удаление отменяет — строка просто вернётся/останется. */
+    var deleteArm = false;
 
     row.addEventListener('touchstart', function (event) {
       if (event.touches.length !== 1) return;
@@ -549,6 +556,7 @@
       startX = event.touches[0].clientX;
       startY = event.touches[0].clientY;
       baseOffset = row._offset || 0;
+      deleteArm = baseOffset < 0; /* открытая строка: тянешь дальше влево — можно удалить */
       tracking = true;
       swiping = true;
       decided = false;
@@ -573,6 +581,9 @@
       var target = baseOffset + dx;
       if (target > 0) target = 0;
       if (target < cap) target = cap;
+      /* направление относительно исходного места строки */
+      if (target > baseOffset + 2) deleteArm = false;
+      else if (target < baseOffset - 2) deleteArm = true;
       row._offset = target;
       setRowOffset(row, target, false);
       if (event.cancelable) event.preventDefault();
@@ -586,8 +597,8 @@
       if (moved > 10) suppressClick(row);
       var offset = row._offset || 0;
       var shifted = -Math.min(offset, 0) / window.innerWidth;
-      if (shifted >= SW_DELETE) {
-        /* доведён до отметки удаления или дальше — удаляем */
+      if (shifted >= SW_DELETE && deleteArm) {
+        /* доведён до отметки удаления или дальше жестом влево — удаляем */
         openSwipe = null;
         removeAlarmById(id, row);
         return;

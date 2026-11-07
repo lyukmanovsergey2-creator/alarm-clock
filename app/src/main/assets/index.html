@@ -372,7 +372,7 @@
     backdrop-filter: blur(7px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity .22s ease;
+    transition: opacity .3s ease;
   }
 
   .overlay.open { opacity: 1; pointer-events: auto; }
@@ -389,11 +389,12 @@
     border-radius: 30px 30px 0 0;
     background: #15151a;
     box-shadow: 0 -30px 80px rgba(0, 0, 0, .55);
-    transform: translateY(26px);
-    transition: transform .26s cubic-bezier(.2, .8, .2, 1);
+    transform: translateY(44px);
+    opacity: .5;
+    transition: transform .34s cubic-bezier(.18, .84, .26, 1), opacity .3s ease;
   }
 
-  .overlay.open .sheet { transform: none; }
+  .overlay.open .sheet { transform: none; opacity: 1; }
 
   .grabber {
     width: 38px;
