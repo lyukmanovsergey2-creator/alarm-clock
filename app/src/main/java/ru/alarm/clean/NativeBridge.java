@@ -58,7 +58,11 @@ public class NativeBridge {
     }
 
     private void collectSounds(int type, List<Sound> out) {
-        RingtoneManager manager = new RingtoneManager(activity);
+        /* Только контекст приложения: если передать Activity, RingtoneManager
+           регистрирует курсор как managed, и при перезапуске Activity
+           случается StaleDataException (requery по закрытому курсору).
+           Фикс сбоя из журнала от 06.11 23:48. */
+        RingtoneManager manager = new RingtoneManager(activity.getApplicationContext());
         manager.setType(type);
         android.database.Cursor cursor = null;
         try {
@@ -613,19 +617,28 @@ public class NativeBridge {
         });
     }
 
-    /** Кнопка «Обновить»: страница релизов в браузере (установка вручную). */
+    /** Кнопка «Обновить»: фоновое скачивание APK, потом системный установщик. */
     @JavascriptInterface
-    public void openUpdatePage() {
+    public void downloadUpdate() {
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
                 try {
-                    UpdateChecker.openReleasePage(activity);
+                    UpdateChecker.download(activity);
                 } catch (Exception e) {
-                    toast("Не удалось открыть браузер");
+                    toast("Не удалось начать скачивание");
                 }
             }
         });
+    }
+
+    /** Кнопка «Позже»: предложение появится при следующей проверке. */
+    @JavascriptInterface
+    public void discardUpdate() {
+        try {
+            UpdateChecker.clearPending(AlarmScheduler.prefs(activity));
+        } catch (Exception ignored) {
+        }
     }
 
     /* ————— Диагностика ————— */

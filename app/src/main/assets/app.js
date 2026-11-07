@@ -452,6 +452,9 @@
     sw.appendChild(document.createElement('span'));
     sw.addEventListener('click', function (event) {
       event.stopPropagation();
+      /* приоткрытая строка: любой тап по ней — отмена удаления */
+      if (openSwipe && openSwipe.row === row) { closeOpenSwipe(); return; }
+      if (row._suppress) return;
       toggleAlarm(a.id);
     });
     content.appendChild(sw);
@@ -494,27 +497,29 @@
       || permOverlay.classList.contains('open') || updateOverlay.classList.contains('open');
   }
 
+  /* Пороги свайпа — в долях ширины экрана (по опыту пользователя):
+     • зона удаления проявляется, когда тумблер доходит до отметки (~0.16 W);
+     • отпускание дальше отметки удаления (~0.53 W) — удаляет будильник;
+     • отпускание раньше отметки — строка остаётся приоткрытой на этом месте;
+     • отпускание до отметки появления — строка возвращается в исходное;
+     • тап по корзине в приоткрытой строке — удалить, тап мимо — вернуть строку. */
+  var SW_APPEAR = 0.16;  /* зона полностью проявилась */
+  var SW_FADE_FROM = 0.08; /* начало проявления */
+  var SW_DELETE = 0.53;  /* порог удаления */
+
   /* Сдвиг строки: animate — с плавным возвратом */
   function setRowOffset(row, offset, animate) {
     var content = row._content;
     if (!content) return;
-    content.style.transition = animate ? 'transform .22s ease' : 'none';
+    content.style.transition = animate ? 'transform .2s ease' : 'none';
     content.style.willChange = 'transform';
     content.style.transform = 'translateX(' + offset + 'px)';
     if (row._del) {
-      var width = row._del.offsetWidth || 190;
-      var reveal = Math.max(0, Math.min(1, Math.abs(Math.min(offset, 0)) / width));
+      var shifted = Math.abs(Math.min(offset, 0)) / window.innerWidth;
+      var span = SW_APPEAR - SW_FADE_FROM;
+      var reveal = Math.max(0, Math.min(1, (shifted - SW_FADE_FROM) / (span > 0 ? span : 0.08)));
       row._del.style.opacity = String(reveal);
     }
-  }
-
-  /* Оставить строку приоткрытой: корзина целиком видна */
-  function settleSwipe(row) {
-    var trash = row._del ? (row._del.offsetWidth || 190) : 190;
-    var target = -(trash + 30);
-    row._offset = target;
-    setRowOffset(row, target, true);
-    openSwipe = { row: row };
   }
 
   function closeOpenSwipe() {
@@ -576,28 +581,26 @@
     row.addEventListener('touchend', function () {
       if (!tracking) return;
       tracking = false;
-      /* с маленькой задержкой: даём settle-анимации отработать без перерисовки */
+      /* с маленькой задержкой: даём анимациям отработать без перерисовки */
       setTimeout(function () { swiping = false; }, 260);
       if (moved > 10) suppressClick(row);
       var offset = row._offset || 0;
-      var width = window.innerWidth;
-      var trash = row._del ? (row._del.offsetWidth || 190) : 190;
-      var thresh = Math.round(width * 0.75);  /* свайп до 3/4 экрана — удалить */
-      var quarter = Math.round(width * 0.25); /* остановился до 1/4 — отмена */
-      var abs = -Math.min(offset, 0);
-      if (abs >= thresh) {
+      var shifted = -Math.min(offset, 0) / window.innerWidth;
+      if (shifted >= SW_DELETE) {
+        /* доведён до отметки удаления или дальше — удаляем */
         openSwipe = null;
         removeAlarmById(id);
         return;
       }
-      if (abs < quarter) {
-        row._offset = 0;
-        setRowOffset(row, 0, true);
-        if (openSwipe && openSwipe.row === row) openSwipe = null;
+      if (shifted >= SW_APPEAR) {
+        /* остаётся на месте, где отпустили; корзина видна, решение за тапом */
+        openSwipe = { row: row };
         return;
       }
-      /* Остановился между 1/4 и 3/4: строка остаётся открытой, решение за тапом */
-      settleSwipe(row);
+      /* не дошёл до отметки появления — возвращается сам, открытая отмена */
+      row._offset = 0;
+      setRowOffset(row, 0, true);
+      if (openSwipe && openSwipe.row === row) openSwipe = null;
     }, { capture: true, passive: true });
 
     /* Система прервала жест — вернуть строку и снять блокировку рендера */
@@ -1341,13 +1344,16 @@
 
   $('updateLater').addEventListener('click', function () {
     closeSheet(updateOverlay);
+    if (bridge && typeof bridge.discardUpdate === 'function') {
+      try { bridge.discardUpdate(); } catch (e) { /* ignore */ }
+    }
     toast('Предложим при следующей проверке');
   });
 
   $('updateNow').addEventListener('click', function () {
     closeSheet(updateOverlay);
-    if (bridge && typeof bridge.openUpdatePage === 'function') {
-      try { bridge.openUpdatePage(); } catch (e) { toast('Не удалось открыть браузер'); }
+    if (bridge && typeof bridge.downloadUpdate === 'function') {
+      try { bridge.downloadUpdate(); } catch (e) { toast('Не удалось начать скачивание'); }
     } else {
       toast('Обновление доступно в приложении');
     }
@@ -1374,6 +1380,12 @@
     } else if (data.manual) {
       toast('У вас последняя версия');
     }
+  };
+
+  /* Прогресс фонового скачивания APK (проценты, приходят каждые ~10%). */
+  window.__onUpdateProgress = function (pct) {
+    var n = parseInt(pct, 10);
+    if (isFinite(n) && n > 0 && n < 100) toast('Скачивание обновления: ' + n + '%');
   };
 
   /* ————— События ————— */
