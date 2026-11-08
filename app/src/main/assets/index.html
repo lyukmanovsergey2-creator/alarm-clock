@@ -17,6 +17,7 @@
     --dim: #5a5a64;
     --accent: #d8ff63;
     --danger: #ff7b72;
+    --ease: cubic-bezier(.22, .9, .28, 1); /* единая плавная кривая анимаций */
     color-scheme: dark;
   }
 
@@ -118,8 +119,10 @@
     display: grid;
     place-items: center;
     cursor: pointer;
-    transition: color .2s, background .2s, border-color .2s;
+    transition: color .2s, background .2s, border-color .2s, transform .16s var(--ease);
   }
+
+  .power:active { transform: scale(.92); }
 
   .power svg { width: 17px; height: 17px; }
   .power.on {
@@ -310,10 +313,10 @@
     gap: 9px;
     font: inherit;
     cursor: pointer;
-    transition: transform .12s ease, filter .2s, opacity .2s;
+    transition: transform .18s var(--ease), filter .2s, opacity .2s, background-color .2s;
   }
 
-  .action:active { transform: scale(.972); }
+  .action:active { transform: scale(.958); }
 
   .act-icon {
     width: 44px;
@@ -561,9 +564,10 @@
     font-weight: 600;
     letter-spacing: -.005em;
     cursor: pointer;
+    transition: transform .18s var(--ease), background-color .2s, color .2s, box-shadow .25s, opacity .2s;
   }
 
-  .btn:active { transform: scale(.985); }
+  .btn:active { transform: scale(.972); }
   .btn-ghost { background: #26262e; color: var(--text); }
   .btn-primary { background: var(--accent); color: #0b0b0d; }
   .btn-danger { background: none; border: 1px solid rgba(255, 123, 114, .35); color: var(--danger); }
@@ -606,9 +610,9 @@
     text-overflow: ellipsis;
     box-shadow: 0 14px 40px rgba(0, 0, 0, .45);
     opacity: 0;
-    transform: translate(-50%, 8px);
+    transform: translate(-50%, 10px) scale(.97);
     pointer-events: none;
-    transition: opacity .2s, transform .2s;
+    transition: opacity .26s var(--ease), transform .3s var(--ease);
   }
 
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -744,6 +748,7 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
+    transition: background-color .18s var(--ease);
   }
   .arow:last-child { border-bottom: 0; }
   .arow:active { background: rgba(255, 255, 255, .04); }
@@ -842,8 +847,9 @@
     font: inherit;
     font-size: 13px;
     cursor: pointer;
-    transition: background .15s, color .15s;
+    transition: background .18s var(--ease), color .18s, border-color .18s, transform .14s var(--ease);
   }
+  .chip:active { transform: scale(.93); }
   .chip.on { background: var(--accent); color: #0b0b0d; border-color: transparent; font-weight: 600; }
 
   .text-input {
@@ -882,8 +888,9 @@
     font: inherit;
     font-size: 13.5px;
     cursor: pointer;
+    transition: background-color .18s, color .18s, border-color .18s, transform .16s var(--ease);
   }
-  .btn-sm:active { background: rgba(255, 255, 255, .1); }
+  .btn-sm:active { transform: scale(.96); background: rgba(255, 255, 255, .1); }
   .btn-sm[disabled] { opacity: .35; pointer-events: none; }
   .btn-sm.accent { background: var(--accent); color: #0b0b0d; border-color: transparent; font-weight: 600; }
 
