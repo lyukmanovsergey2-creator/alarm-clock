@@ -667,7 +667,29 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
+    padding: 2px 12px 14px;
   }
+
+  /* Заголовок группы («Сегодня» / «Позже» / «Выключены») */
+  .grouptitle {
+    padding: 10px 10px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+
+  /* Группа-карточка со строками (стиль «Часов»: сгруппированный список) */
+  .agroup {
+    margin-top: 6px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .5);
+  }
+  .alist > .agroup:first-child { margin-top: 2px; }
 
   .alist-empty {
     padding: 18px;
@@ -676,18 +698,24 @@
     text-align: center;
   }
 
-  /* Порядковый номер будильника в строке списка */
+  /* Порядковый номер будильника в строке списка — круг-бейдж в стиле iOS */
   .anum {
     flex: 0 0 auto;
-    min-width: 22px;
-    text-align: center;
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--dim);
+    width: 27px;
+    height: 27px;
+    display: grid;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--muted);
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid var(--line);
     font-variant-numeric: tabular-nums;
-    align-self: center;
+    transition: color .2s, background-color .2s;
   }
-  .arow.on .anum { color: var(--muted); }
+  .arow.on .anum { color: var(--text); }
 
   .alabel.dim { color: var(--dim); }
 
@@ -698,7 +726,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 0;
+    padding: 12px 14px;
     position: relative;
     overflow: hidden;
     border-bottom: 1px solid rgba(255, 255, 255, .05);
@@ -939,14 +967,19 @@
   body.light {
     --surface: #ffffff;
     --surface-2: #e9eae3;
-    --line: rgba(20, 24, 12, .1);
+    --line: rgba(20, 24, 12, .08);
     --text: #1c1d22;
     --muted: #5f6068;
     --dim: #9b9ca4;
     --danger: #c94b42;
     color-scheme: light;
-    background: linear-gradient(180deg, #fafaf7 0%, #efefeb 60%, #e7e7e3 100%);
+    background: #f2f2f7;
   }
+  body.light .agroup {
+    box-shadow: 0 14px 34px -22px rgba(30, 30, 50, .35);
+    border-color: rgba(20, 24, 12, .05);
+  }
+  body.light .anum { background: #e9e9ef; border-color: transparent; }
 
   body.light .dot { background: #c2c2c8; }
   body.light .app.active .dot { box-shadow: 0 0 12px rgba(178, 216, 56, .55); }

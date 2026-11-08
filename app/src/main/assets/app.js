@@ -67,6 +67,13 @@
   var swiping = false;  /* активный жест свайпа — рендер списка отложен */
 
   var bridge = window.NativeAlarm || null;
+
+  /* Тактильный отклик нативного WebView-моста (короткая вибрация) */
+  function haptic(ms) {
+    try {
+      if (bridge && typeof bridge.haptic === 'function') bridge.haptic(ms);
+    } catch (e) { /* вибрация недоступна — не мешаем */ }
+  }
   var state = loadState();
   var sounds = [{ title: 'По умолчанию', uri: '' }];
   var previewTimer = 0;
@@ -389,8 +396,39 @@
     openSwipe = null;
     alarmList.innerHTML = '';
     emptyHint.hidden = state.alarms.length > 0;
+
+    /* Виджет-плюс: группировка «Сегодня / Позже / Выключены».
+       «Сегодня» — включённые, которые сработают до полуночи; если группа всего одна,
+       заголовки не показываем (плоский iOS-список как раньше). */
+    var midnight = Date.now();
+    var dt = new Date();
+    midnight = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + 1).getTime();
+    var today = [], later = [], off = [];
     for (var i = 0; i < state.alarms.length; i++) {
-      alarmList.appendChild(buildAlarmRow(state.alarms[i], i + 1));
+      var ga = state.alarms[i];
+      if (!ga.enabled) { off.push(ga); continue; }
+      if (nextOccurrence(ga) < midnight) today.push(ga); else later.push(ga);
+    }
+    var groups = [];
+    if (today.length) groups.push(['Сегодня', today]);
+    if (later.length) groups.push(['Позже', later]);
+    if (off.length) groups.push(['Выключены', off]);
+    var showTitles = groups.length > 1;
+    var number = 1;
+    for (var gi = 0; gi < groups.length; gi++) {
+      if (showTitles) {
+        var cap = document.createElement('div');
+        cap.className = 'grouptitle';
+        cap.textContent = groups[gi][0];
+        alarmList.appendChild(cap);
+      }
+      var card = document.createElement('div');
+      card.className = 'agroup';
+      var rows = groups[gi][1];
+      for (var ri = 0; ri < rows.length; ri++) {
+        card.appendChild(buildAlarmRow(rows[ri], number++));
+      }
+      alarmList.appendChild(card);
     }
   }
 
@@ -491,6 +529,7 @@
     saveState();
     render();
     pushState();
+    haptic(16);
     toast(a.enabled ? 'Включён на ' + formatHM(a.hour, a.minute) : 'Будильник ' + formatHM(a.hour, a.minute) + ' выключен');
   }
 
@@ -657,6 +696,7 @@
       if (state.alarms[i].id === id) { idx = i; break; }
     }
     if (idx < 0) return;
+    haptic(38);
     if (ringingId === id) {
       /* Удаляем будильник, который сейчас звонит — звонок прекращаем */
       if (bridge && typeof bridge.stopRinging === 'function') {
@@ -951,8 +991,51 @@
     overlay.setAttribute('aria-hidden', 'false');
   }
 
+  /* Редактор «вырастает» из tapped-строки: стартовая позиция шторки — прямо
+     на строке; дальше она плавно разворачивается на своё место. For нового
+     будильника — обычный мягкий выезд снизу. */
+  function expandSheetFromRow(overlay, rowEl) {
+    var sheet = overlay.querySelector('.sheet');
+    if (!sheet) return;
+    if (!rowEl || !rowEl.getBoundingClientRect) return;
+    try {
+      var rc = rowEl.getBoundingClientRect();
+      var sh = sheet.offsetHeight;
+      if (!sh) return;
+      var rowCY = rc.top + rc.height / 2;
+      var sheetCY = window.innerHeight - sh / 2;
+      var dy = rowCY - sheetCY;
+      var originPct = Math.max(0, Math.min(100, (rowCY - (window.innerHeight - sh)) / sh * 100));
+      sheet.style.transition = 'none';
+      sheet.style.transformOrigin = '50% ' + originPct.toFixed(1) + '%';
+      sheet.style.transform = 'translateY(' + dy.toFixed(1) + 'px) scale(.94)';
+      sheet.style.opacity = '.4';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          sheet.style.transition = '';
+          sheet.style.transform = '';
+          sheet.style.opacity = '';
+          sheet.style.transformOrigin = '';
+        });
+      });
+    } catch (e) {
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      sheet.style.transformOrigin = '';
+    }
+  }
+
   function closeSheet(overlay) {
     var wasOpen = overlay.classList.contains('open');
+    /* снять инлайновые стили раскрытия — шторка штатно уезжает по CSS */
+    var sheet = overlay.querySelector('.sheet');
+    if (sheet) {
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      sheet.style.opacity = '';
+      sheet.style.transformOrigin = '';
+    }
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
     stopPreview();
@@ -1088,6 +1171,10 @@
     $('eChallengeNumbersSet').hidden = !editAlarm.challenge;
 
     openSheet(alarmOverlay);
+    expandSheetFromRow(
+      alarmOverlay,
+      isNew ? null : alarmList.querySelector('.arow[data-id="' + editingId + '"]')
+    );
   }
 
   function updateDaysRow(days) {

@@ -681,6 +681,30 @@ public class NativeBridge {
         });
     }
 
+    /* Тактильный отклик: короткая вибрация (тап тумблера, удаление свайпом).
+       Длительность в мс, безопасно ограничена; разрешения VIBRATE уже в манифесте. */
+    @JavascriptInterface
+    public void haptic(int milliseconds) {
+        try {
+            Context ctx = activity.getApplicationContext();
+            android.os.Vibrator vib;
+            if (Build.VERSION.SDK_INT >= 31) {
+                android.os.VibratorManager vm =
+                        (android.os.VibratorManager) ctx.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                if (vm == null) return;
+                vib = vm.getDefaultVibrator();
+            } else {
+                vib = (android.os.Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
+            }
+            if (vib == null || !vib.hasVibrator()) return;
+            long ms = Math.max(8, Math.min(80, milliseconds));
+            vib.vibrate(android.os.VibrationEffect.createOneShot(
+                    ms, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+        } catch (Throwable t) {
+            /* вибрация недоступна — не мешаем */
+        }
+    }
+
     void release() {
         mainHandler.removeCallbacksAndMessages(null);
         stopPreviewInternal();
