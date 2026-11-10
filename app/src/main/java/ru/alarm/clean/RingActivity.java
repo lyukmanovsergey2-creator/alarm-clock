@@ -363,12 +363,49 @@ public class RingActivity extends Activity {
         if (answerView != null) answerView.setText("");
     }
 
+    /* Клавиша-контейнер с фиксированной высотой (компактная клавиатура) */
+    private LinearLayout makeKeyRow(String[] keys) {
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(86));
+        lp.setMargins(dp(5), dp(5), dp(5), dp(5));
+        for (int c = 0; c < keys.length; c++) {
+            final String key = keys[c];
+            TextView button = new TextView(this);
+            button.setText(key);
+            button.setTextSize(28);
+            button.setGravity(Gravity.CENTER);
+            boolean ok = key.equals("✓");
+            button.setTextColor(ok ? ON_ACCENT : TEXT);
+            GradientDrawable shape = new GradientDrawable();
+            shape.setColor(ok ? ACCENT : KEY_BG);
+            shape.setCornerRadius(dp(20));
+            button.setBackground(shape);
+            button.setClickable(true);
+            button.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    onKey(key);
+                }
+            });
+            LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0,
+                    ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            bp.setMargins(dp(5), 0, dp(5), 0);
+            button.setPadding(0, 0, 0, 0);
+            line.addView(button, bp);
+        }
+        line.setLayoutParams(lp);
+        return line;
+    }
+
     private void showChallenge() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setPadding(dp(22), dp(18), dp(22), dp(18));
+        root.setPadding(dp(20), dp(14), dp(20), dp(10));
 
         challengeHint = new TextView(this);
         challengeHint.setText("Решите пример, чтобы отключить");
@@ -378,66 +415,60 @@ public class RingActivity extends Activity {
         root.addView(challengeHint, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
+        /* «Красная» зона: занимает всё свободное место; сам пример — в её центре,
+           вложенная строка (переносов нет), ряд клавиш 1 2 3 — у нижнего края зоны */
+        LinearLayout red = new LinearLayout(this);
+        red.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams redLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        redLp.topMargin = dp(8);
+        root.addView(red, redLp);
+
+        LinearLayout center = new LinearLayout(this);
+        center.setOrientation(LinearLayout.VERTICAL);
+        center.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams centerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        red.addView(center, centerLp);
+
         questionView = new TextView(this);
-        questionView.setTextSize(40);
+        questionView.setTextSize(46);
         questionView.setTextColor(TEXT);
-        questionView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        questionView.setSingleLine(true); /* переносов на другую строку не бывает */
         questionView.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        qp.topMargin = dp(14);
-        root.addView(questionView, qp);
+        questionView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        center.addView(questionView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         answerView = new TextView(this);
-        answerView.setTextSize(34);
+        answerView.setTextSize(36);
         answerView.setTextColor(ACCENT);
         answerView.setGravity(Gravity.CENTER);
         answerView.setMinHeight(dp(52));
-        root.addView(answerView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ap.topMargin = dp(6);
+        center.addView(answerView, ap);
 
-        String[][] rows = {{"1", "2", "3"}, {"4", "5", "6"}, {"7", "8", "9"}, {"←", "0", "✓"}};
-        LinearLayout pad = new LinearLayout(this);
-        pad.setOrientation(LinearLayout.VERTICAL);
-        for (int r = 0; r < rows.length; r++) {
-            LinearLayout line = new LinearLayout(this);
-            line.setOrientation(LinearLayout.HORIZONTAL);
-            for (int c = 0; c < 3; c++) {
-                final String key = rows[r][c];
-                TextView button = new TextView(this);
-                button.setText(key);
-                button.setTextSize(24);
-                button.setGravity(Gravity.CENTER);
-                boolean ok = key.equals("✓");
-                button.setTextColor(ok ? ON_ACCENT : TEXT);
-                GradientDrawable shape = new GradientDrawable();
-                shape.setColor(ok ? ACCENT : KEY_BG);
-                shape.setCornerRadius(dp(20));
-                button.setBackground(shape);
-                button.setClickable(true);
-                button.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        onKey(key);
-                    }
-                });
-                LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(0,
-                        ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-                bp.setMargins(dp(5), dp(5), dp(5), dp(5));
-                line.addView(button, bp);
-            }
-            pad.addView(line, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        }
-        root.addView(pad, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        red.addView(makeKeyRow(new String[]{"1", "2", "3"}));
+
+        /* «Синяя» зона: оставшиеся ряды клавиш — компактной фиксированной высоты */
+        LinearLayout blue = new LinearLayout(this);
+        blue.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams blueLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        blueLp.topMargin = dp(6);
+        root.addView(blue, blueLp);
+        blue.addView(makeKeyRow(new String[]{"4", "5", "6"}));
+        blue.addView(makeKeyRow(new String[]{"7", "8", "9"}));
+        blue.addView(makeKeyRow(new String[]{"←", "0", "✓"}));
 
         TextView back = new TextView(this);
         back.setText("Назад");
         back.setTextSize(15);
         back.setTextColor(MUTED);
         back.setGravity(Gravity.CENTER);
-        back.setPadding(dp(12), dp(12), dp(12), dp(4));
+        back.setPadding(dp(12), dp(10), dp(12), dp(4));
         back.setClickable(true);
         back.setOnClickListener(new View.OnClickListener() {
             @Override

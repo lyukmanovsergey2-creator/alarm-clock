@@ -10,8 +10,8 @@ SRC="$ROOT/app/src/main"
 BUILD="$ROOT/build"
 ANDROID_JAR="${ANDROID_JAR:-$HOME/android.jar}"
 DX="${DX:-$(command -v d8 || command -v dx || echo /home/opencode/bt34/d8)}"
-VERSION_CODE="${VERSION_CODE:-22}"
-VERSION_NAME="${VERSION_NAME:-2.10}"
+VERSION_CODE="${VERSION_CODE:-23}"
+VERSION_NAME="${VERSION_NAME:-2.11}"
 OUT="${OUT:-$ROOT/AlarmClock.apk}"
 
 [ -f "$ANDROID_JAR" ] || { echo "Не найден android.jar: $ANDROID_JAR"; exit 1; }

@@ -344,15 +344,14 @@
       statusText.textContent = enabledCount + ' ' + alarmsWord(enabledCount) + ' включено';
     }
 
-    /* Верхние часы: ближайший включённый будильник */
+    /* Верхние часы: актуальное время (интервал renderTop держит их свежими) */
+    var dn = new Date();
+    timeBtn.textContent = formatHM(dn.getHours(), dn.getMinutes());
+    nowText.hidden = true; /* дублирует часы — подсказка остаётся в nextText */
     if (nearest.alarm) {
-      timeBtn.textContent = formatHM(nearest.alarm.hour, nearest.alarm.minute);
-      nowText.hidden = false;
       metaMid.hidden = false;
       nextText.textContent = (nearest.alarm.label || 'Будильник') + ' · ' + humanDuration(nearest.ts - Date.now());
     } else {
-      timeBtn.textContent = '--:--';
-      nowText.hidden = true;
       metaMid.hidden = true;
       nextText.textContent = state.alarms.length === 0 ? 'создайте будильник кнопкой ниже' : 'все выключены';
     }
@@ -378,11 +377,11 @@
      Список будильников не перерисовываем, чтобы не мешать касаниям. */
   function renderTop() {
     var nearest = nearestEnabled();
+    var dn = new Date();
+    timeBtn.textContent = formatHM(dn.getHours(), dn.getMinutes());
+    nowText.hidden = true;
     if (nearest.alarm) {
-      timeBtn.textContent = formatHM(nearest.alarm.hour, nearest.alarm.minute);
-      nowText.hidden = false;
       metaMid.hidden = false;
-      nowText.textContent = formatHM(new Date().getHours(), new Date().getMinutes());
       nextText.textContent = (nearest.alarm.label || 'Будильник') + ' · ' + humanDuration(nearest.ts - Date.now());
     }
   }
