@@ -325,7 +325,7 @@ public class RingActivity extends Activity {
                 int c = 5 + random.nextInt(20);
                 int d = 10 + random.nextInt(50);
                 answer = a + b - c + d;
-                text = a + " + " + b + " − " + c + " + " + d;
+                text = a + "+" + b + "−" + c + "+" + d;
             } else if (type == 1) {
                 /* a − b + c − d */
                 int a = 80 + random.nextInt(60);
@@ -333,7 +333,7 @@ public class RingActivity extends Activity {
                 int c = 10 + random.nextInt(50);
                 int d = 10 + random.nextInt(40);
                 answer = a - b + c - d;
-                text = a + " − " + b + " + " + c + " − " + d;
+                text = a + "−" + b + "+" + c + "−" + d;
             } else if (type == 2) {
                 /* a × b + c − d */
                 int a = 2 + random.nextInt(5);
@@ -341,7 +341,7 @@ public class RingActivity extends Activity {
                 int c = 5 + random.nextInt(25);
                 int d = 5 + random.nextInt(20);
                 answer = a * b + c - d;
-                text = a + " × " + b + " + " + c + " − " + d;
+                text = a + "×" + b + "+" + c + "−" + d;
             } else {
                 /* a + b × c − d */
                 int a = 10 + random.nextInt(40);
@@ -349,7 +349,7 @@ public class RingActivity extends Activity {
                 int c = 3 + random.nextInt(8);
                 int d = 5 + random.nextInt(25);
                 answer = a + b * c - d;
-                text = a + " + " + b + " × " + c + " − " + d;
+                text = a + "+" + b + "×" + c + "−" + d;
             }
         } else if (terms == 3) {
             int type = random.nextInt(3);
@@ -359,21 +359,21 @@ public class RingActivity extends Activity {
                 int b = 10 + random.nextInt(30);
                 int c = 5 + random.nextInt(15);
                 answer = a + b - c;
-                text = a + " + " + b + " − " + c;
+                text = a + "+" + b + "−" + c;
             } else if (type == 1) {
                 /* a − b + c */
                 int a = 60 + random.nextInt(30);
                 int b = 10 + random.nextInt(30);
                 int c = 10 + random.nextInt(40);
                 answer = a - b + c;
-                text = a + " − " + b + " + " + c;
+                text = a + "−" + b + "+" + c;
             } else {
                 /* a × b + c */
                 int a = 2 + random.nextInt(5);
                 int b = 3 + random.nextInt(6);
                 int c = 5 + random.nextInt(20);
                 answer = a * b + c;
-                text = a + " × " + b + " + " + c;
+                text = a + "×" + b + "+" + c;
             }
         } else {
             int type = random.nextInt(3);
@@ -381,22 +381,43 @@ public class RingActivity extends Activity {
                 int a = 20 + random.nextInt(70);
                 int b = 20 + random.nextInt(70);
                 answer = a + b;
-                text = a + " + " + b;
+                text = a + "+" + b;
             } else if (type == 1) {
                 int a = 60 + random.nextInt(40);
                 int b = 15 + random.nextInt(40);
                 answer = a - b;
-                text = a + " − " + b;
+                text = a + "−" + b;
             } else {
                 int a = 3 + random.nextInt(7);
                 int b = 12 + random.nextInt(8);
                 answer = a * b;
-                text = a + " × " + b;
+                text = a + "×" + b;
             }
         }
         typed.setLength(0);
-        if (questionView != null) questionView.setText(text + " = ?");
+        String full = text + " = ?";
+        if (questionView != null) {
+            questionView.setText(full);
+            fitQuestionSize(full);
+        }
         if (answerView != null) answerView.setText("");
+    }
+
+    /* Подбор размера шрифта примера: берём крупнейший размер, при котором
+       строка гарантированно влезает по ширине экрана. Никакого авторазмера:
+       высота строки и её обрезка не зависят от позднего пересчёта — размер
+       известен до отрисовки. */
+    private void fitQuestionSize(String full) {
+        float maxSp = 48f, minSp = 22f;
+        questionView.setTextSize(TypedValue.COMPLEX_UNIT_SP, maxSp);
+        float textW = questionView.getPaint().measureText(full);
+        if (textW <= 0) return;
+        /* ширина экрана минус горизонтальные паддинги root и небольшой запас */
+        int avail = getResources().getDisplayMetrics().widthPixels
+                - dp(20) * 2 - dp(12);
+        if (avail <= 0) return;
+        float sp = Math.max(minSp, Math.min(maxSp, maxSp * avail / textW));
+        questionView.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
     }
 
     /* Клавиша-контейнер с фиксированной высотой (компактная клавиатура) */
@@ -451,36 +472,23 @@ public class RingActivity extends Activity {
         root.addView(challengeHint, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        /* «Красная» зона: занимает всё свободное место; сам пример — в её центре,
-           вложенная строка (переносов нет), ряд клавиш 1 2 3 — у нижнего края зоны */
+        /* «Красная» зона — только для примера: занимает всё свободное место,
+           пример (и вводимый ответ) строго в её центре; клавиатура — целиком ниже */
         LinearLayout red = new LinearLayout(this);
         red.setOrientation(LinearLayout.VERTICAL);
+        red.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams redLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
         redLp.topMargin = dp(8);
         root.addView(red, redLp);
 
-        LinearLayout center = new LinearLayout(this);
-        center.setOrientation(LinearLayout.VERTICAL);
-        center.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams centerLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
-        red.addView(center, centerLp);
-
         questionView = new TextView(this);
         questionView.setTextColor(TEXT);
         questionView.setSingleLine(true); /* переносов на другую строку не бывает */
         questionView.setGravity(Gravity.CENTER);
+        questionView.setIncludeFontPadding(false);
         questionView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
-        /* Пример из 4 чисел длинный: на Android 8+ шрифт сам ужимается под ширину,
-           на старых системах — фиксированный мельче размер. */
-        if (Build.VERSION.SDK_INT >= 26) {
-            questionView.setAutoSizeTextTypeUniformWithConfiguration(
-                    24, 46, 2, TypedValue.COMPLEX_UNIT_SP);
-        } else {
-            questionView.setTextSize(34);
-        }
-        center.addView(questionView, new LinearLayout.LayoutParams(
+        red.addView(questionView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         answerView = new TextView(this);
@@ -491,17 +499,16 @@ public class RingActivity extends Activity {
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         ap.topMargin = dp(6);
-        center.addView(answerView, ap);
+        red.addView(answerView, ap);
 
-        red.addView(makeKeyRow(new String[]{"1", "2", "3"}));
-
-        /* «Синяя» зона: оставшиеся ряды клавиш — компактной фиксированной высоты */
+        /* Клавиатура целиком в нижней зоне: четыре ряда фиксированной высоты */
         LinearLayout blue = new LinearLayout(this);
         blue.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams blueLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         blueLp.topMargin = dp(6);
         root.addView(blue, blueLp);
+        blue.addView(makeKeyRow(new String[]{"1", "2", "3"}));
         blue.addView(makeKeyRow(new String[]{"4", "5", "6"}));
         blue.addView(makeKeyRow(new String[]{"7", "8", "9"}));
         blue.addView(makeKeyRow(new String[]{"←", "0", "✓"}));
