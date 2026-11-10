@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -310,12 +311,47 @@ public class RingActivity extends Activity {
     private void newProblem() {
         int terms = 2;
         try {
-            terms = Math.max(2, Math.min(3, AlarmScheduler
+            terms = Math.max(2, Math.min(4, AlarmScheduler
                     .alarmChallengeNumbers(AlarmScheduler.prefs(this), alarmId)));
         } catch (Exception ignored) {
         }
         String text;
-        if (terms == 3) {
+        if (terms == 4) {
+            int type = random.nextInt(4);
+            if (type == 0) {
+                /* a + b − c + d */
+                int a = 20 + random.nextInt(50);
+                int b = 10 + random.nextInt(40);
+                int c = 5 + random.nextInt(20);
+                int d = 10 + random.nextInt(50);
+                answer = a + b - c + d;
+                text = a + " + " + b + " − " + c + " + " + d;
+            } else if (type == 1) {
+                /* a − b + c − d */
+                int a = 80 + random.nextInt(60);
+                int b = 10 + random.nextInt(40);
+                int c = 10 + random.nextInt(50);
+                int d = 10 + random.nextInt(40);
+                answer = a - b + c - d;
+                text = a + " − " + b + " + " + c + " − " + d;
+            } else if (type == 2) {
+                /* a × b + c − d */
+                int a = 2 + random.nextInt(5);
+                int b = 3 + random.nextInt(7);
+                int c = 5 + random.nextInt(25);
+                int d = 5 + random.nextInt(20);
+                answer = a * b + c - d;
+                text = a + " × " + b + " + " + c + " − " + d;
+            } else {
+                /* a + b × c − d */
+                int a = 10 + random.nextInt(40);
+                int b = 2 + random.nextInt(4);
+                int c = 3 + random.nextInt(8);
+                int d = 5 + random.nextInt(25);
+                answer = a + b * c - d;
+                text = a + " + " + b + " × " + c + " − " + d;
+            }
+        } else if (terms == 3) {
             int type = random.nextInt(3);
             if (type == 0) {
                 /* a + b − c */
@@ -432,11 +468,18 @@ public class RingActivity extends Activity {
         red.addView(center, centerLp);
 
         questionView = new TextView(this);
-        questionView.setTextSize(46);
         questionView.setTextColor(TEXT);
         questionView.setSingleLine(true); /* переносов на другую строку не бывает */
         questionView.setGravity(Gravity.CENTER);
         questionView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        /* Пример из 4 чисел длинный: на Android 8+ шрифт сам ужимается под ширину,
+           на старых системах — фиксированный мельче размер. */
+        if (Build.VERSION.SDK_INT >= 26) {
+            questionView.setAutoSizeTextTypeUniformWithConfiguration(
+                    24, 46, 2, TypedValue.COMPLEX_UNIT_SP);
+        } else {
+            questionView.setTextSize(34);
+        }
         center.addView(questionView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 

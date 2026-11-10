@@ -137,7 +137,7 @@
       result.vibrate = s.vibrate !== false;
       result.autoStopMinutes = clamp(parseInt(num(s.autoStopMinutes, 10), 10), 0, 120);
       result.challenge = !!s.challenge;
-      result.challengeNumbers = clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 3);
+      result.challengeNumbers = clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 4);
       result.theme = num(s.theme, 0) === 1 ? 1 : 0;
       result.updateCheck = !!s.updateCheck;
       if (Array.isArray(s.alarms)) {
@@ -187,7 +187,7 @@
       vibrate: s.vibrate !== false,
       autoStopMinutes: clamp(parseInt(num(s.autoStopMinutes, 10), 10), 0, 120),
       challenge: !!s.challenge,
-      challengeNumbers: clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 3),
+      challengeNumbers: clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 4),
       theme: num(s.theme, 0) === 1 ? 1 : 0,
       alarms: []
     };
@@ -227,7 +227,7 @@
       out.maxSnoozes = clamp(parseInt(num(a.maxSnoozes, 0), 10), 0, 20);
       out.vibrate = a.vibrate !== false;
       out.challenge = !!a.challenge;
-      out.challengeNumbers = clamp(parseInt(num(a.challengeNumbers, 2), 10), 2, 3);
+      out.challengeNumbers = clamp(parseInt(num(a.challengeNumbers, 2), 10), 2, 4);
     }
     return out;
   }

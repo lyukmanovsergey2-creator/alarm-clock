@@ -230,7 +230,7 @@ public class NativeBridge {
                     }
                     if (item.has("challengeNumbers")) {
                         editor.putInt(AlarmScheduler.key(id, "challengeNumbers"),
-                                clampInt(item.optInt("challengeNumbers", 2), 2, 3));
+                                clampInt(item.optInt("challengeNumbers", 2), 2, 4));
                     }
                     if (changed) {
                         editor.putLong(AlarmScheduler.key(id, "triggerAt"), 0);
@@ -276,7 +276,7 @@ public class NativeBridge {
             editor.putInt("autoStopMinutes", clampInt(c.optInt("autoStopMinutes", 10), 0, 120));
         if (c.has("challenge")) editor.putBoolean("challenge", c.optBoolean("challenge", false));
         if (c.has("challengeNumbers"))
-            editor.putInt("challengeNumbers", clampInt(c.optInt("challengeNumbers", 2), 2, 3));
+            editor.putInt("challengeNumbers", clampInt(c.optInt("challengeNumbers", 2), 2, 4));
         if (c.has("maxSnoozes"))
             editor.putInt("maxSnoozes", clampInt(c.optInt("maxSnoozes", 0), 0, 20));
         if (c.has("updateCheck")) editor.putBoolean("updateCheck", c.optBoolean("updateCheck", false));
