@@ -210,30 +210,33 @@ final class UpdateChecker {
     }
 
     /** Ссылка на APK со страницы ассетов релиза (обычный HTML, без API). */
-    private static String findApkUrl(String tag) throws Exception {
-        String html = httpGet(REPO_WEB + "/releases/expanded_assets/" + tag, "text/html");
-        int from = 0;
-        while (true) {
-            int dot = html.indexOf(".apk", from);
-            if (dot < 0) {
-                break;
-            }
-            int end = dot + 4;
-            if (end < html.length() && html.charAt(end) == '"') {
-                int href = html.lastIndexOf("href=\"", dot);
-                if (href >= 0) {
-                    String url = html.substring(href + 6, end);
-                    if (url.startsWith("/")) {
-                        url = "https://github.com" + url;
-                    }
-                    if (url.startsWith("http")) {
-                        return url;
+    private static String findApkUrl(String tag) {
+        try {
+            String html = httpGet(REPO_WEB + "/releases/expanded_assets/" + tag, "text/html");
+            int from = 0;
+            while (true) {
+                int dot = html.indexOf(".apk", from);
+                if (dot < 0) {
+                    break;
+                }
+                int end = dot + 4;
+                if (end < html.length() && html.charAt(end) == '"') {
+                    int href = html.lastIndexOf("href=\"", dot);
+                    if (href >= 0) {
+                        String url = html.substring(href + 6, end);
+                        if (url.startsWith("/")) {
+                            url = "https://github.com" + url;
+                        }
+                        if (url.startsWith("http")) {
+                            return url;
+                        }
                     }
                 }
+                from = end;
             }
-            from = end;
+        } catch (Exception ignored) {
+            /* страница не отдалась — ниже соберём ссылку по имени ассета */
         }
-        /* Страница не отдалась как ожидалось — собираем имя ассета сами. */
         return REPO_WEB + "/releases/download/" + tag + "/AlarmClock-" + tag + ".apk";
     }
 
