@@ -34,8 +34,14 @@ final class UpdateChecker {
     private static final String K_LAST = "updateLastCheckAt";
     private static final String K_PENDING_VERSION = "updatePendingVersion";
     private static final String K_PENDING_URL = "updatePendingUrl";
-    /* Публичный адрес релизов приложения (без авторизации). */
-    private static final String RELEASES_URL =
+    /* Публичные адреса без API: у api.github.com жёсткий лимит 60 запросов
+       в час на IP, из-за него проверка падала с HTTP 403. Лента релизов и
+       страница ассетов отдаются обычным github.com без такого лимита. */
+    private static final String REPO_WEB =
+            "https://github.com/lyukmanovsergey2-creator/alarm-clock";
+    private static final String ATOM_URL = REPO_WEB + "/releases.atom";
+    /* Резервный путь — API, если обычные страницы почему-то недоступны. */
+    private static final String RELEASES_API =
             "https://api.github.com/repos/lyukmanovsergey2-creator/alarm-clock/releases/latest";
     private static final long CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000; /* раз в сутки */
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -92,31 +98,10 @@ final class UpdateChecker {
                     prefs.edit().putLong(K_LAST, System.currentTimeMillis()).apply();
 
                     String current = currentVersion(activity);
-                    HttpURLConnection conn = (HttpURLConnection) new URL(RELEASES_URL).openConnection();
-                    conn.setConnectTimeout(10000);
-                    conn.setReadTimeout(10000);
-                    conn.setRequestProperty("Accept", "application/vnd.github+json");
-                    conn.setRequestProperty("User-Agent", "CleanAlarm-App");
-                    int code = conn.getResponseCode();
-                    if (code != 200) {
-                        throw new Exception("HTTP " + code);
-                    }
-                    String body = readAll(conn.getInputStream());
-                    JSONObject release = new JSONObject(body);
-                    String tag = release.optString("tag_name", "");
-                    String version = versionFromTag(tag);
-                    String apkUrl = "";
-                    JSONArray assets = release.optJSONArray("assets");
-                    for (int i = 0; assets != null && i < assets.length(); i++) {
-                        JSONObject asset = assets.getJSONObject(i);
-                        if (asset.optString("name", "").toLowerCase().endsWith(".apk")) {
-                            apkUrl = asset.optString("browser_download_url", "");
-                            break;
-                        }
-                    }
-                    if (version == null || apkUrl.isEmpty()) {
-                        throw new Exception("релиз без APK (" + tag + ")");
-                    }
+                    ReleaseInfo release = fetchRelease();
+                    String tag = release.tag;
+                    String version = release.version;
+                    String apkUrl = release.apkUrl;
                     boolean newer = isNewer(version, current);
                     if (newer) {
                         prefs.edit()
@@ -161,6 +146,132 @@ final class UpdateChecker {
                 }
             }
         }).start();
+    }
+
+    private static final class ReleaseInfo {
+        final String tag;
+        final String version;
+        final String apkUrl;
+
+        ReleaseInfo(String tag, String version, String apkUrl) {
+            this.tag = tag;
+            this.version = version;
+            this.apkUrl = apkUrl;
+        }
+    }
+
+    /**
+     * Узнаёт последний релиз без GitHub API.
+     * 1) Atom-лента релизов — только номер тега;
+     * 2) страница ассетов релиза — ссылка на APK;
+     * 3) если что-то не так, пробуем API (может ответить 403 при лимите).
+     */
+    private static ReleaseInfo fetchRelease() throws Exception {
+        Exception atomError = null;
+        try {
+            return fetchFromAtom();
+        } catch (Exception exception) {
+            atomError = exception;
+        }
+        try {
+            return fetchFromApi();
+        } catch (Exception apiError) {
+            throw atomError != null ? atomError : apiError;
+        }
+    }
+
+    private static ReleaseInfo fetchFromAtom() throws Exception {
+        String xml = httpGet(ATOM_URL, "application/atom+xml");
+        int entry = xml.indexOf("<entry>");
+        if (entry < 0) {
+            throw new Exception("в ленте нет релизов");
+        }
+        String rest = xml.substring(entry);
+        String link = "<link rel=\"alternate\" type=\"text/html\" href=\"";
+        int at = rest.indexOf(link);
+        if (at < 0) {
+            throw new Exception("в ленте нет ссылки на релиз");
+        }
+        int start = at + link.length();
+        int end = rest.indexOf('"', start);
+        String href = end > start ? rest.substring(start, end) : "";
+        String marker = "/releases/tag/";
+        int tagAt = href.indexOf(marker);
+        if (tagAt < 0) {
+            throw new Exception("в ленте нет тега релиза");
+        }
+        String tag = href.substring(tagAt + marker.length()).trim();
+        String version = versionFromTag(tag);
+        if (version == null) {
+            throw new Exception("непонятный тег (" + tag + ")");
+        }
+        String apkUrl = findApkUrl(tag);
+        return new ReleaseInfo(tag, version, apkUrl);
+    }
+
+    /** Ссылка на APK со страницы ассетов релиза (обычный HTML, без API). */
+    private static String findApkUrl(String tag) throws Exception {
+        String html = httpGet(REPO_WEB + "/releases/expanded_assets/" + tag, "text/html");
+        int from = 0;
+        while (true) {
+            int dot = html.indexOf(".apk", from);
+            if (dot < 0) {
+                break;
+            }
+            int end = dot + 4;
+            if (end < html.length() && html.charAt(end) == '"') {
+                int href = html.lastIndexOf("href=\"", dot);
+                if (href >= 0) {
+                    String url = html.substring(href + 6, end);
+                    if (url.startsWith("/")) {
+                        url = "https://github.com" + url;
+                    }
+                    if (url.startsWith("http")) {
+                        return url;
+                    }
+                }
+            }
+            from = end;
+        }
+        /* Страница не отдалась как ожидалось — собираем имя ассета сами. */
+        return REPO_WEB + "/releases/download/" + tag + "/AlarmClock-" + tag + ".apk";
+    }
+
+    /** Резервная проверка через API (прежнее поведение). */
+    private static ReleaseInfo fetchFromApi() throws Exception {
+        String body = httpGet(RELEASES_API, "application/vnd.github+json");
+        JSONObject release = new JSONObject(body);
+        String tag = release.optString("tag_name", "");
+        String version = versionFromTag(tag);
+        String apkUrl = "";
+        JSONArray assets = release.optJSONArray("assets");
+        for (int i = 0; assets != null && i < assets.length(); i++) {
+            JSONObject asset = assets.getJSONObject(i);
+            if (asset.optString("name", "").toLowerCase().endsWith(".apk")) {
+                apkUrl = asset.optString("browser_download_url", "");
+                break;
+            }
+        }
+        if (version == null || apkUrl.isEmpty()) {
+            throw new Exception("релиз без APK (" + tag + ")");
+        }
+        return new ReleaseInfo(tag, version, apkUrl);
+    }
+
+    private static String httpGet(String url, String accept) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setConnectTimeout(10000);
+        conn.setReadTimeout(10000);
+        conn.setInstanceFollowRedirects(true);
+        conn.setRequestProperty("User-Agent", "CleanAlarm-App");
+        if (accept != null) {
+            conn.setRequestProperty("Accept", accept);
+        }
+        int code = conn.getResponseCode();
+        if (code != 200) {
+            throw new Exception("HTTP " + code);
+        }
+        return readAll(conn.getInputStream());
     }
 
     /** Скачивает APK обновления в кеш приложения, по завершении открывает установку. */
