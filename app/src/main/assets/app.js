@@ -25,6 +25,8 @@
     light: false,    /* исполнение внутри выбранной темы */
     updateCheck: false,
     alarms: []   /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
+    fallbackSoundUri: "",
+    fallbackSoundTitle: ""
   };
 
   var $ = function (id) { return document.getElementById(id); };
