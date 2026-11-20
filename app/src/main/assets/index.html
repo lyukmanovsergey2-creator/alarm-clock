@@ -1693,6 +1693,16 @@
       </button>
     </div>
     <p class="hint">Системные звуки будильника вашего устройства</p>
+    <div style="margin: 8px 0; display: flex; gap: 16px; align-items: center;">
+      <label style="font-size: 12px; color: var(--muted);">
+        <input type="radio" name="soundMode" value="primary" checked>
+        Основной
+      </label>
+      <label style="font-size: 12px; color: var(--muted);">
+        <input type="radio" name="soundMode" value="fallback">
+        Запасной
+      </label>
+    </div>
     <div class="sound-list" id="soundList"></div>
     <button class="btn-sm add-file" id="addFileBtn" type="button">+ Выбрать свой файл…</button>
     <div class="sheet-actions">

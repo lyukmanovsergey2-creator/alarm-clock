@@ -50,6 +50,12 @@
 
   var soundOverlay = $('soundOverlay');
   var soundList = $('soundList');
+  /* Синхронизация режима звука */
+  document.querySelectorAll("input[name=\"soundMode\"]").forEach(function(radio) {
+    radio.addEventListener("change", function() {
+      soundMode = this.value;
+    });
+  });
   var moreOverlay = $('moreOverlay');
   var disableOverlay = $('disableOverlay');
   var alarmOverlay = $('alarmOverlay');
@@ -71,6 +77,7 @@
   var swiping = false;  /* активный жест свайпа — рендер списка отложен */
 
   var bridge = window.NativeAlarm || null;
+  var soundMode = 'primary'; /* 'primary' или 'fallback' */
 
   /* Тактильный отклик нативного WebView-моста (короткая вибрация) */
   function haptic(ms) {
@@ -931,8 +938,13 @@
       toast('Звук выбран: ' + title);
       return;
     }
-    state.soundTitle = title;
-    state.soundUri = uri;
+    if (soundMode === 'fallback') {
+      state.fallbackSoundTitle = title;
+      state.fallbackSoundUri = uri;
+    } else {
+      state.soundTitle = title;
+      state.soundUri = uri;
+    }
     loadSoundList();
     render();
     pushSettings();
@@ -974,8 +986,13 @@
       closeSheet(soundOverlay);
       return;
     }
-    state.soundTitle = title;
-    state.soundUri = uri || '';
+    if (soundMode === 'fallback') {
+      state.fallbackSoundTitle = title;
+      state.fallbackSoundUri = uri || '';
+    } else {
+      state.soundTitle = title;
+      state.soundUri = uri || '';
+    }
     saveState();
     render();
     pushSettings();
