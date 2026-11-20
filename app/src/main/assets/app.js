@@ -35,6 +35,7 @@
   var nextText = $('nextText');
   var nowText = $('nowText');
   var metaMid = $('metaMid');
+  var ticksEl = $('ticks');
   var alarmList = $('alarmList');
   var emptyHint = $('emptyHint');
   var snoozeBtn = $('snoozeBtn');
@@ -310,12 +311,41 @@
     return maxId + 1;
   }
 
+  /* ————— Шкала суток под часами ————— */
+  var tickMark = null;
+  (function buildTicks() {
+    if (!ticksEl) return;
+    for (var i = 0; i < 24; i++) {
+      var t = document.createElement('i');
+      if (i % 6 === 0) t.className = 'major';
+      ticksEl.appendChild(t);
+    }
+    tickMark = document.createElement('span');
+    tickMark.className = 'mk';
+    tickMark.hidden = true;
+    ticksEl.appendChild(tickMark);
+  })();
+
+  function renderTicks(alarm) {
+    if (!ticksEl || !tickMark) return;
+    if (!alarm) {
+      tickMark.hidden = true;
+      ticksEl.style.opacity = '.45';
+      return;
+    }
+    ticksEl.style.opacity = '1';
+    var minutes = alarm.hour * 60 + alarm.minute;
+    var pct = Math.min(99, Math.max(1, minutes / 1440 * 100));
+    tickMark.hidden = false;
+    tickMark.style.left = pct + '%';
+  }
+
   /* ————— Тема ————— */
   function applyTheme() {
     var light = state.theme === 1;
     document.body.classList.toggle('light', light);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', light ? '#f4f4f0' : '#0b0b0e');
+    if (meta) meta.setAttribute('content', light ? '#edeff0' : '#0a0b0d');
     var scheme = document.querySelector('meta[name="color-scheme"]');
     if (scheme) scheme.setAttribute('content', light ? 'light' : 'dark');
     if (bridge && typeof bridge.applyTheme === 'function') {
@@ -356,6 +386,8 @@
       nextText.textContent = state.alarms.length === 0 ? 'создайте будильник кнопкой ниже' : 'все выключены';
     }
 
+    renderTicks(nearest.alarm || null);
+
     /* Нижняя секция: звонок или создание */
     var ringing = AlarmServiceRunning();
     createBtn.hidden = ringing;
@@ -384,6 +416,7 @@
       metaMid.hidden = false;
       nextText.textContent = (nearest.alarm.label || 'Будильник') + ' · ' + humanDuration(nearest.ts - Date.now());
     }
+    renderTicks(nearest.alarm || null);
   }
 
   function AlarmServiceRunning() {

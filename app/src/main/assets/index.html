@@ -8,15 +8,17 @@
 <title>Будильник</title>
 <style>
   :root {
-    --bg: #0b0b0e;
-    --surface: #16161b;
-    --surface-2: #1d1d24;
-    --line: rgba(255, 255, 255, .07);
-    --text: #f4f3ef;
-    --muted: #8b8b96;
-    --dim: #5a5a64;
-    --accent: #d8ff63;
-    --danger: #ff7b72;
+    --bg: #0a0b0d;
+    --surface: #121418;
+    --surface-2: #191c21;
+    --line: rgba(255, 255, 255, .09);
+    --text: #eceee7;
+    --muted: #868b93;
+    --dim: #5f646c;
+    --accent: #d7ff57;
+    --accent-ink: #0a0b0d;
+    --danger: #ff6b5e;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", "Menlo", monospace;
     --ease: cubic-bezier(.22, .9, .28, 1); /* единая плавная кривая анимаций */
     color-scheme: dark;
   }
@@ -33,8 +35,7 @@
   }
 
   body {
-    background:
-      radial-gradient(120% 80% at 50% -10%, #1c1d24 0%, #0b0b0e 55%, #08080a 100%);
+    background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Segoe UI", sans-serif;
     overflow: hidden;
@@ -126,7 +127,7 @@
 
   .power svg { width: 17px; height: 17px; }
   .power.on {
-    color: #0b0b0d;
+    color: var(--accent-ink);
     background: var(--accent);
     border-color: transparent;
   }
@@ -148,11 +149,12 @@
     background: none;
     color: var(--text);
     font: inherit;
-    font-size: 88px;
-    font-size: clamp(64px, 23vw, 118px);
-    font-weight: 300;
+    font-family: var(--mono);
+    font-size: 84px;
+    font-size: clamp(60px, 21vw, 108px);
+    font-weight: 500;
     line-height: .96;
-    letter-spacing: -.055em;
+    letter-spacing: -.07em;
     font-variant-numeric: tabular-nums lining-nums;
     font-feature-settings: "tnum" 1, "lnum" 1;
     cursor: pointer;
@@ -161,6 +163,31 @@
 
   .app:not(.active) .time { color: #4c4c55; }
   .time:active { opacity: .72; }
+
+  /* Шкала суток под часами: 24 тика, метка — ближайший будильник */
+  .ticks {
+    position: relative;
+    width: min(88%, 360px);
+    height: 18px;
+    margin: 4px auto 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    transition: opacity .25s;
+  }
+  .ticks i { width: 1px; height: 5px; background: rgba(255, 255, 255, .17); display: block; }
+  .ticks i.major { height: 11px; background: rgba(255, 255, 255, .32); }
+  .ticks .mk {
+    position: absolute;
+    bottom: -2px;
+    width: 2px;
+    height: 18px;
+    border-radius: 1px;
+    background: var(--accent);
+    transition: left .45s var(--ease);
+  }
+  body.light .ticks i { background: rgba(18, 20, 25, .17); }
+  body.light .ticks i.major { background: rgba(18, 20, 25, .3); }
 
   .meta {
     display: flex;
@@ -189,11 +216,9 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--line);
-    border-radius: 26px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .025));
+    border-radius: 12px;
+    background: var(--surface);
     overflow: hidden;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
   }
 
   .row {
@@ -265,8 +290,8 @@
     flex: 0 0 auto;
     padding: 0;
     border: 1px solid rgba(255, 255, 255, .06);
-    border-radius: 999px;
-    background: #2b2b34;
+    border-radius: 6px;
+    background: #2b3038;
     cursor: pointer;
     transition: background .22s, border-color .22s;
   }
@@ -277,8 +302,8 @@
     left: 3px;
     width: 22px;
     height: 22px;
-    border-radius: 50%;
-    background: #8b8b96;
+    border-radius: 4px;
+    background: #868b93;
     transition: left .22s cubic-bezier(.2, .8, .2, 1), background .22s;
   }
 
@@ -289,7 +314,7 @@
 
   .switch[aria-checked="true"] span {
     left: 23px;
-    background: #0b0b0d;
+    background: var(--accent-ink);
   }
 
   /* ————— Нижняя треть: две кнопки ————— */
@@ -305,7 +330,7 @@
     min-width: 0;
     min-height: 0;
     padding: 18px 12px;
-    border-radius: 26px;
+    border-radius: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -348,15 +373,15 @@
   .snooze {
     border: 0;
     background: var(--accent);
-    color: #0b0b0d;
-    box-shadow: 0 18px 44px -22px rgba(216, 255, 99, .55);
+    color: var(--accent-ink);
+    box-shadow: none;
   }
 
-  .snooze .act-icon { background: rgba(11, 11, 14, .1); }
+  .snooze .act-icon { background: rgba(11, 11, 14, .12); }
 
   .disable {
-    border: 1px solid rgba(255, 123, 114, .16);
-    background: linear-gradient(180deg, #1c1c23, #141419);
+    border: 1px solid var(--line);
+    background: var(--surface-2);
     color: var(--danger);
   }
 
@@ -389,9 +414,9 @@
     padding: 10px 20px calc(16px + env(safe-area-inset-bottom, 0px));
     border: 1px solid var(--line);
     border-bottom: 0;
-    border-radius: 30px 30px 0 0;
-    background: #15151a;
-    box-shadow: 0 -30px 80px rgba(0, 0, 0, .55);
+    border-radius: 18px 18px 0 0;
+    background: var(--surface);
+    box-shadow: 0 -24px 60px rgba(0, 0, 0, .45);
     transform: translateY(44px);
     opacity: .5;
     transition: transform .34s cubic-bezier(.18, .84, .26, 1), opacity .3s ease;
@@ -503,7 +528,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #0b0b0d;
+    background: var(--accent-ink);
   }
 
   .play {
@@ -530,10 +555,11 @@
     background: transparent;
     color: var(--text);
     font: inherit;
-    font-size: 72px;
-    font-size: clamp(58px, 19vw, 88px);
-    font-weight: 300;
-    letter-spacing: -.05em;
+    font-family: var(--mono);
+    font-size: 68px;
+    font-size: clamp(54px, 18vw, 82px);
+    font-weight: 500;
+    letter-spacing: -.06em;
     text-align: center;
     font-variant-numeric: tabular-nums;
     outline: none;
@@ -558,7 +584,7 @@
     flex: 1;
     height: 52px;
     border: 0;
-    border-radius: 17px;
+    border-radius: 8px;
     font: inherit;
     font-size: 15px;
     font-weight: 600;
@@ -569,7 +595,7 @@
 
   .btn:active { transform: scale(.972); }
   .btn-ghost { background: #26262e; color: var(--text); }
-  .btn-primary { background: var(--accent); color: #0b0b0d; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); }
   .btn-danger { background: none; border: 1px solid rgba(255, 123, 114, .35); color: var(--danger); }
   body.light .btn-danger { border-color: rgba(201, 75, 66, .4); }
   body.light .btn-danger:active { background: rgba(201, 75, 66, .08); }
@@ -648,7 +674,7 @@
     height: clamp(32px, 4.6vh, 40px);
     padding: 0;
     border: 1px solid rgba(255, 255, 255, .07);
-    border-radius: 12px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, .035);
     color: var(--muted);
     font: inherit;
@@ -657,7 +683,7 @@
     cursor: pointer;
     transition: background .15s, color .15s;
   }
-  .day.on { background: var(--accent); color: #0b0b0d; border-color: transparent; }
+  .day.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
   .day.weekend:not(.on) { color: #b9877f; }
 
   /* ————— Список будильников (средняя треть) ————— */
@@ -685,9 +711,9 @@
     margin-top: 6px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 20px;
+    border-radius: 10px;
     overflow: hidden;
-    box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .5);
+    box-shadow: none;
   }
   .alist > .agroup:first-child { margin-top: 2px; }
 
@@ -706,9 +732,10 @@
     display: grid;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 6px;
     font-size: 11.5px;
     font-weight: 600;
+    font-family: var(--mono);
     color: var(--muted);
     background: rgba(255, 255, 255, .05);
     border: 1px solid var(--line);
@@ -783,9 +810,10 @@
   body.light .arow:active { background: rgba(20, 24, 12, .05); }
 
   .atime {
-    font-size: 31px;
-    font-weight: 300;
-    letter-spacing: -.03em;
+    font-family: var(--mono);
+    font-size: 29px;
+    font-weight: 500;
+    letter-spacing: -.045em;
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     flex: 0 0 auto;
@@ -869,7 +897,7 @@
     height: 36px;
     padding: 0 14px;
     border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 12px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, .04);
     color: #c9c9c0;
     font: inherit;
@@ -878,7 +906,7 @@
     transition: background .18s var(--ease), color .18s, border-color .18s, transform .14s var(--ease);
   }
   .chip:active { transform: scale(.93); }
-  .chip.on { background: var(--accent); color: #0b0b0d; border-color: transparent; font-weight: 600; }
+  .chip.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 
   .text-input {
     width: 100%;
@@ -920,7 +948,7 @@
   }
   .btn-sm:active { transform: scale(.96); background: rgba(255, 255, 255, .1); }
   .btn-sm[disabled] { opacity: .35; pointer-events: none; }
-  .btn-sm.accent { background: var(--accent); color: #0b0b0d; border-color: transparent; font-weight: 600; }
+  .btn-sm.accent { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 
   .health { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
   .health + .health { border-top: 1px solid rgba(255, 255, 255, .05); }
@@ -965,15 +993,18 @@
 
   /* ————— Светлая тема ————— */
   body.light {
+    --bg: #edeff0;
     --surface: #ffffff;
-    --surface-2: #e9eae3;
-    --line: rgba(20, 24, 12, .08);
-    --text: #1c1d22;
-    --muted: #5f6068;
-    --dim: #9b9ca4;
-    --danger: #c94b42;
+    --surface-2: #e3e6e8;
+    --line: rgba(18, 20, 25, .12);
+    --text: #121419;
+    --muted: #5c626b;
+    --dim: #8a909a;
+    --accent: #2e8ef0;
+    --accent-ink: #ffffff;
+    --danger: #c0392b;
     color-scheme: light;
-    background: #f2f2f7;
+    background: #edeff0;
   }
   body.light .agroup {
     box-shadow: 0 14px 34px -22px rgba(30, 30, 50, .35);
@@ -982,10 +1013,10 @@
   body.light .anum { background: #e9e9ef; border-color: transparent; }
 
   body.light .dot { background: #c2c2c8; }
-  body.light .app.active .dot { box-shadow: 0 0 12px rgba(178, 216, 56, .55); }
+  body.light .app.active .dot { box-shadow: 0 0 12px rgba(46, 142, 240, .5); }
   body.light .app.active #statusText { color: #43443a; }
   body.light .power { border-color: rgba(20, 24, 12, .14); background: rgba(20, 24, 12, .04); color: #8b8c94; }
-  body.light .power.on { color: #17181c; }
+  body.light .power.on { color: var(--accent-ink); }
   body.light .app:not(.active) .time { color: #b6b6bd; }
   body.light .meta .mid { background: #a9aab1; }
   body.light .card { background: #ffffff; border-color: rgba(20, 24, 12, .09); }
@@ -993,12 +1024,12 @@
   body.light .icon { color: #43443a; background: rgba(20, 24, 12, .05); }
   body.light .switch { background: #d9d9de; border-color: rgba(20, 24, 12, .1); }
   body.light .switch span { background: #ffffff; }
-  body.light .snooze { color: #17181c; box-shadow: 0 18px 44px -22px rgba(150, 190, 40, .5); }
-  body.light .snooze .act-icon { background: rgba(23, 24, 28, .12); }
-  body.light .disable { background: #fdfdfb; border-color: rgba(201, 75, 66, .4); color: var(--danger); }
+  body.light .snooze { color: var(--accent-ink); box-shadow: none; }
+  body.light .snooze .act-icon { background: rgba(255, 255, 255, .22); }
+  body.light .disable { background: var(--surface-2); border-color: rgba(201, 75, 66, .35); color: var(--danger); }
   body.light .disable .act-icon { background: rgba(201, 75, 66, .09); }
   body.light .overlay { background: rgba(235, 235, 231, .62); }
-  body.light .sheet { background: #f7f7f3; box-shadow: 0 -30px 80px rgba(30, 30, 20, .22); }
+  body.light .sheet { background: var(--surface); box-shadow: 0 -24px 60px rgba(30, 30, 40, .18); }
   body.light .grabber { background: #c8c8cf; }
   body.light .close { background: rgba(20, 24, 12, .06); color: #5b5c64; }
   body.light .sound { border-bottom-color: rgba(20, 24, 12, .07); }
@@ -1009,12 +1040,12 @@
   body.light .btn-ghost { background: #e6e6e1; color: var(--text); }
   body.light .toast { background: #1c1d22; color: #f4f3ef; box-shadow: 0 14px 40px rgba(30, 30, 20, .3); }
   body.light .day { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: #5f6068; }
-  body.light .day.on { color: #17181c; }
+  body.light .day.on { color: var(--accent-ink); }
   body.light .day.weekend:not(.on) { color: #a34f46; }
   body.light .set { border-bottom-color: rgba(20, 24, 12, .07); }
   body.light .set-title { color: var(--text); }
   body.light .chip { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: #43443a; }
-  body.light .chip.on { color: #17181c; }
+  body.light .chip.on { color: var(--accent-ink); }
   body.light .text-input { background: #ffffff; border-color: rgba(20, 24, 12, .16); color: var(--text); }
   body.light .btn-sm { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: var(--text); }
   body.light .btn-sm:active { background: rgba(20, 24, 12, .1); }
@@ -1062,6 +1093,7 @@
 
     <div class="timeblock">
       <button class="time" id="timeBtn" type="button" aria-label="Настроить будильник">--:--</button>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
       <div class="meta">
         <span id="nowText" hidden>--:--</span>
         <span class="mid" id="metaMid" hidden aria-hidden="true"></span>

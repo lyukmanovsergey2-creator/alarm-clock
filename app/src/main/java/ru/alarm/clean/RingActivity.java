@@ -28,13 +28,13 @@ import java.util.Random;
 public class RingActivity extends Activity {
 
     /* Палитра: подменяется в onCreate, если в настройках выбрана светлая тема. */
-    private static int BG = Color.parseColor("#0B0B0E");
-    private static int TEXT = Color.parseColor("#F4F3EF");
-    private static int MUTED = Color.parseColor("#8B8B96");
-    private static int ACCENT = Color.parseColor("#D8FF63");
-    private static int DANGER = Color.parseColor("#FF7B72");
+    private static int BG = Color.parseColor("#0A0B0D");
+    private static int TEXT = Color.parseColor("#ECEEE7");
+    private static int MUTED = Color.parseColor("#868B93");
+    private static int ACCENT = Color.parseColor("#D7FF57");
+    private static int DANGER = Color.parseColor("#FF6B5E");
     /* Тёмные чернила на акцентных кнопках, фон и обводка клавиш «Отключить»/клавиатуры. */
-    private static int ON_ACCENT = Color.parseColor("#0B0B0E");
+    private static int ON_ACCENT = Color.parseColor("#0A0B0D");
     private static int KEY_BG = Color.parseColor("#1A1A21");
     private static int DISABLE_BG = Color.parseColor("#1A1A21");
     private static int DISABLE_STROKE = Color.parseColor("#33FF7B72");
@@ -121,22 +121,22 @@ public class RingActivity extends Activity {
 
     private void applyPalette(boolean light) {
         if (light) {
-            BG = Color.parseColor("#F4F4F0");
-            TEXT = Color.parseColor("#1C1D22");
-            MUTED = Color.parseColor("#66676F");
-            ACCENT = Color.parseColor("#B5E332");
-            DANGER = Color.parseColor("#C94B42");
+            BG = Color.parseColor("#EDEFF0");
+            TEXT = Color.parseColor("#121419");
+            MUTED = Color.parseColor("#5C626B");
+            ACCENT = Color.parseColor("#2E8EF0");
+            DANGER = Color.parseColor("#C0392B");
         } else {
-            BG = Color.parseColor("#0B0B0E");
-            TEXT = Color.parseColor("#F4F3EF");
-            MUTED = Color.parseColor("#8B8B96");
-            ACCENT = Color.parseColor("#D8FF63");
-            DANGER = Color.parseColor("#FF7B72");
+            BG = Color.parseColor("#0A0B0D");
+            TEXT = Color.parseColor("#ECEEE7");
+            MUTED = Color.parseColor("#868B93");
+            ACCENT = Color.parseColor("#D7FF57");
+            DANGER = Color.parseColor("#FF6B5E");
         }
-        ON_ACCENT = Color.parseColor("#17181C");
-        KEY_BG = light ? Color.parseColor("#E7E8E1") : Color.parseColor("#1A1A21");
-        DISABLE_BG = light ? Color.parseColor("#FDFCF8") : Color.parseColor("#1A1A21");
-        DISABLE_STROKE = light ? Color.parseColor("#4DC94B42") : Color.parseColor("#33FF7B72");
+        ON_ACCENT = Color.parseColor(light ? "#FFFFFF" : "#0A0B0D");
+        KEY_BG = light ? Color.parseColor("#E3E6E8") : Color.parseColor("#191C21");
+        DISABLE_BG = light ? Color.parseColor("#FFFFFF") : Color.parseColor("#191C21");
+        DISABLE_STROKE = light ? Color.parseColor("#4DC0392B") : Color.parseColor("#33FF6B5E");
     }
 
     private View buildInterface() {

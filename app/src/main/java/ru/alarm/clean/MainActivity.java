@@ -20,7 +20,7 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private NativeBridge bridge;
-    private int appBackground = Color.parseColor("#0B0B0E");
+    private int appBackground = Color.parseColor("#0A0B0D");
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,8 +72,8 @@ public class MainActivity extends Activity {
         });
 
         Window window = getWindow();
-        window.setStatusBarColor(Color.parseColor("#0B0B0E"));
-        window.setNavigationBarColor(Color.parseColor("#0B0B0E"));
+        window.setStatusBarColor(Color.parseColor("#0A0B0D"));
+        window.setNavigationBarColor(Color.parseColor("#0A0B0D"));
         if (Build.VERSION.SDK_INT >= 29) {
             window.setNavigationBarContrastEnforced(false);
         }
@@ -128,7 +128,7 @@ public class MainActivity extends Activity {
 
     /** Окрашивает системные бары под выбранную тему (вызывается и из NativeBridge). */
     void applyThemeColors(boolean light) {
-        appBackground = Color.parseColor(light ? "#F4F4F0" : "#0B0B0E");
+        appBackground = Color.parseColor(light ? "#EDEFF0" : "#0A0B0D");
         Window window = getWindow();
         window.setStatusBarColor(appBackground);
         window.setNavigationBarColor(appBackground);
