@@ -973,7 +973,9 @@
     min-width: 0;
     padding: 5px;
     border: 1px solid var(--btn-line);
-    border-radius: var(--r-chip);
+    /* Карточка выбора — не часть темы: фиксированный радиус, иначе в «Саду»
+       овальная рамка обрезает квадратную миниатюру. */
+    border-radius: 12px;
     background: var(--btn-bg);
     color: var(--text);
     font: inherit;
@@ -986,7 +988,7 @@
   .theme-card .mini {
     height: 54px;
     padding: 7px 8px;
-    border-radius: 4px;
+    border-radius: 8px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -1011,12 +1013,14 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
     margin-top: 6px;
     padding: 0 2px 1px;
     font-size: 12px;
     font-weight: 600;
   }
   .theme-name em {
+    flex: 0 0 auto;
     margin-left: auto;
     font-style: normal;
     font-size: 10px;
@@ -1035,7 +1039,7 @@
   .mini-paper b { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.02em; }
   .mini-paper i { background: rgba(240, 233, 219, .2); }
   .mini-paper i.a { background: #d8744c; }
-  .mini-garden { background: #0f1410; color: #e8efe6; border-radius: 10px; }
+  .mini-garden { background: #0f1410; color: #e8efe6; border-radius: 8px; }
   .mini-garden b { font-weight: 300; letter-spacing: -.05em; }
   .mini-garden i { background: rgba(232, 239, 230, .18); border-radius: 2px; }
   .mini-garden i.a { background: #8fc7a6; }
