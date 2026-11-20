@@ -8,16 +8,71 @@
 <title>Будильник</title>
 <style>
   :root {
+    /* ——— Палитра «Пульт» (по умолчанию): тёмное исполнение ——— */
     --bg: #0a0b0d;
     --surface: #121418;
     --surface-2: #191c21;
     --line: rgba(255, 255, 255, .09);
+    --line-strong: rgba(255, 255, 255, .2);
     --text: #eceee7;
     --muted: #868b93;
     --dim: #5f646c;
     --accent: #d7ff57;
     --accent-ink: #0a0b0d;
     --danger: #ff6b5e;
+
+    --track: #2b3038;
+    --knob: #868b93;
+    --knob-on: #0a0b0d;
+    --badge-bg: rgba(255, 255, 255, .05);
+    --badge-line: rgba(255, 255, 255, .09);
+    --field-bg: rgba(255, 255, 255, .04);
+    --field-line: rgba(255, 255, 255, .09);
+    --ghost-bg: #26262e;
+    --btn-bg: rgba(255, 255, 255, .035);
+    --btn-line: rgba(255, 255, 255, .08);
+    --chip-bg: rgba(255, 255, 255, .04);
+    --chip-line: rgba(255, 255, 255, .08);
+    --chip-ink: #c9c9c0;
+    --press: rgba(255, 255, 255, .04);
+    --press-strong: rgba(255, 255, 255, .1);
+    --overlay: rgba(4, 4, 6, .62);
+    --sheet-shadow: 0 -24px 60px rgba(0, 0, 0, .45);
+    --card-shadow: none;
+    --dot-off: #3b3b44;
+    --dot-mid: #3f3f48;
+    --status-active: #cfcfc4;
+    --time-off: #4c4c55;
+    --icon-ink: #cfcfc4;
+    --radio: #4b4b55;
+    --grabber: #34343e;
+    --weekend: #b9877f;
+    --toast-bg: #f4f3ef;
+    --toast-ink: #0b0b0d;
+    --accent-icon: rgba(11, 11, 14, .12);
+    --danger-line: rgba(255, 107, 94, .35);
+    --danger-bg: rgba(255, 107, 94, .09);
+    --tick: rgba(255, 255, 255, .17);
+    --tick-major: rgba(255, 255, 255, .32);
+    --accent-glow: 0 0 12px rgba(216, 255, 99, .55);
+
+    --num-font: ui-monospace, "SF Mono", "Roboto Mono", "Menlo", monospace;
+    --num-weight: 500;
+    --num-spacing: -.07em;
+    --head-font: inherit;
+
+    --r-sheet: 18px;
+    --r-card: 12px;
+    --r-group: 10px;
+    --r-btn: 8px;
+    --r-chip: 6px;
+    --r-field: 8px;
+    --r-action: 10px;
+    --r-switch: 6px;
+    --r-badge: 6px;
+    --r-day: 6px;
+    --r-knob: 4px;
+
     --mono: ui-monospace, "SF Mono", "Roboto Mono", "Menlo", monospace;
     --ease: cubic-bezier(.22, .9, .28, 1); /* единая плавная кривая анимаций */
     color-scheme: dark;
@@ -86,14 +141,14 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #3b3b44;
+    background: var(--dot-off);
     flex: 0 0 auto;
     transition: background .25s, box-shadow .25s;
   }
 
   .app.active .dot {
     background: var(--accent);
-    box-shadow: 0 0 12px rgba(216, 255, 99, .65);
+    box-shadow: var(--accent-glow);
   }
 
   #statusText {
@@ -106,7 +161,7 @@
     transition: color .25s;
   }
 
-  .app.active #statusText { color: #cfcfc4; }
+  .app.active #statusText { color: var(--status-active); }
 
   .power {
     margin-left: 0;
@@ -114,8 +169,8 @@
     height: 40px;
     flex: 0 0 auto;
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, .08);
-    background: rgba(255, 255, 255, .035);
+    border: 1px solid var(--btn-line);
+    background: var(--btn-bg);
     color: var(--dim);
     display: grid;
     place-items: center;
@@ -149,19 +204,19 @@
     background: none;
     color: var(--text);
     font: inherit;
-    font-family: var(--mono);
+    font-family: var(--num-font);
     font-size: 84px;
     font-size: clamp(60px, 21vw, 108px);
-    font-weight: 500;
+    font-weight: var(--num-weight);
     line-height: .96;
-    letter-spacing: -.07em;
+    letter-spacing: var(--num-spacing);
     font-variant-numeric: tabular-nums lining-nums;
     font-feature-settings: "tnum" 1, "lnum" 1;
     cursor: pointer;
     transition: color .25s, opacity .25s;
   }
 
-  .app:not(.active) .time { color: #4c4c55; }
+  .app:not(.active) .time { color: var(--time-off); }
   .time:active { opacity: .72; }
 
   /* Шкала суток под часами: 24 тика, метка — ближайший будильник */
@@ -175,8 +230,8 @@
     justify-content: space-between;
     transition: opacity .25s;
   }
-  .ticks i { width: 1px; height: 5px; background: rgba(255, 255, 255, .17); display: block; }
-  .ticks i.major { height: 11px; background: rgba(255, 255, 255, .32); }
+  .ticks i { width: 1px; height: 5px; background: var(--tick); display: block; }
+  .ticks i.major { height: 11px; background: var(--tick-major); }
   .ticks .mk {
     position: absolute;
     bottom: -2px;
@@ -186,8 +241,6 @@
     background: var(--accent);
     transition: left .45s var(--ease);
   }
-  body.light .ticks i { background: rgba(18, 20, 25, .17); }
-  body.light .ticks i.major { background: rgba(18, 20, 25, .3); }
 
   .meta {
     display: flex;
@@ -199,7 +252,7 @@
     letter-spacing: .01em;
   }
 
-  .meta .mid { width: 3px; height: 3px; border-radius: 50%; background: #3f3f48; flex: 0 0 auto; }
+  .meta .mid { width: 3px; height: 3px; border-radius: 50%; background: var(--dot-mid); flex: 0 0 auto; }
   .meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* ————— Средняя треть: настройки ————— */
@@ -216,7 +269,7 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--line);
-    border-radius: 12px;
+    border-radius: var(--r-card);
     background: var(--surface);
     overflow: hidden;
   }
@@ -236,7 +289,7 @@
     cursor: pointer;
   }
 
-  .row:active { background: rgba(255, 255, 255, .035); }
+  .row:active { background: var(--press); }
   .row.static { cursor: default; }
   .row.static:active { background: none; }
 
@@ -247,8 +300,8 @@
     border-radius: 13px;
     display: grid;
     place-items: center;
-    color: #cfcfc4;
-    background: rgba(255, 255, 255, .06);
+    color: var(--icon-ink);
+    background: var(--btn-bg);
   }
 
   .icon svg { width: 19px; height: 19px; }
@@ -289,9 +342,9 @@
     height: 30px;
     flex: 0 0 auto;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, .06);
-    border-radius: 6px;
-    background: #2b3038;
+    border: 1px solid var(--btn-line);
+    border-radius: var(--r-switch);
+    background: var(--track);
     cursor: pointer;
     transition: background .22s, border-color .22s;
   }
@@ -302,8 +355,8 @@
     left: 3px;
     width: 22px;
     height: 22px;
-    border-radius: 4px;
-    background: #868b93;
+    border-radius: var(--r-knob);
+    background: var(--knob);
     transition: left .22s cubic-bezier(.2, .8, .2, 1), background .22s;
   }
 
@@ -314,7 +367,7 @@
 
   .switch[aria-checked="true"] span {
     left: 23px;
-    background: var(--accent-ink);
+    background: var(--knob-on);
   }
 
   /* ————— Нижняя треть: две кнопки ————— */
@@ -330,7 +383,7 @@
     min-width: 0;
     min-height: 0;
     padding: 18px 12px;
-    border-radius: 10px;
+    border-radius: var(--r-action);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -377,15 +430,15 @@
     box-shadow: none;
   }
 
-  .snooze .act-icon { background: rgba(11, 11, 14, .12); }
+  .snooze .act-icon { background: var(--accent-icon); }
 
   .disable {
-    border: 1px solid var(--line);
+    border: 1px solid var(--danger-line);
     background: var(--surface-2);
     color: var(--danger);
   }
 
-  .disable .act-icon { background: rgba(255, 123, 114, .09); }
+  .disable .act-icon { background: var(--danger-bg); }
 
   /* ————— Модальные панели ————— */
   .overlay {
@@ -395,7 +448,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    background: rgba(4, 4, 6, .62);
+    background: var(--overlay);
     -webkit-backdrop-filter: blur(7px);
     backdrop-filter: blur(7px);
     opacity: 0;
@@ -414,9 +467,9 @@
     padding: 10px 20px calc(16px + env(safe-area-inset-bottom, 0px));
     border: 1px solid var(--line);
     border-bottom: 0;
-    border-radius: 18px 18px 0 0;
+    border-radius: var(--r-sheet) var(--r-sheet) 0 0;
     background: var(--surface);
-    box-shadow: 0 -24px 60px rgba(0, 0, 0, .45);
+    box-shadow: var(--sheet-shadow);
     transform: translateY(44px);
     opacity: .5;
     transition: transform .34s cubic-bezier(.18, .84, .26, 1), opacity .3s ease;
@@ -429,7 +482,7 @@
     height: 4px;
     margin: 2px auto 14px;
     border-radius: 4px;
-    background: #34343e;
+    background: var(--grabber);
     flex: 0 0 auto;
   }
 
@@ -443,6 +496,7 @@
 
   .sheet-head h2 {
     margin: 0;
+    font-family: var(--head-font);
     font-size: 18px;
     font-weight: 600;
     letter-spacing: -.015em;
@@ -454,7 +508,7 @@
     height: 36px;
     border: 0;
     border-radius: 50%;
-    background: rgba(255, 255, 255, .06);
+    background: var(--btn-bg);
     color: var(--muted);
     display: grid;
     place-items: center;
@@ -487,7 +541,7 @@
     gap: 12px;
     padding: 12px 4px;
     border: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, .05);
+    border-bottom: 1px solid var(--line);
     background: none;
     color: inherit;
     font: inherit;
@@ -501,7 +555,7 @@
     flex: 1;
     min-width: 0;
     font-size: 14.5px;
-    color: #deded6;
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -511,7 +565,7 @@
     width: 22px;
     height: 22px;
     flex: 0 0 auto;
-    border: 1.5px solid #4b4b55;
+    border: 1.5px solid var(--radio);
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -539,13 +593,13 @@
     border-radius: 50%;
     display: grid;
     place-items: center;
-    background: rgba(255, 255, 255, .06);
-    color: #d8d8cf;
+    background: var(--btn-bg);
+    color: var(--icon-ink);
     cursor: pointer;
   }
 
   .play svg { width: 15px; height: 15px; }
-  .play:active { background: rgba(255, 255, 255, .13); }
+  .play:active { background: var(--press-strong); }
 
   .time-input {
     width: 100%;
@@ -555,11 +609,11 @@
     background: transparent;
     color: var(--text);
     font: inherit;
-    font-family: var(--mono);
+    font-family: var(--num-font);
     font-size: 68px;
     font-size: clamp(54px, 18vw, 82px);
-    font-weight: 500;
-    letter-spacing: -.06em;
+    font-weight: var(--num-weight);
+    letter-spacing: var(--num-spacing);
     text-align: center;
     font-variant-numeric: tabular-nums;
     outline: none;
@@ -584,7 +638,7 @@
     flex: 1;
     height: 52px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--r-btn);
     font: inherit;
     font-size: 15px;
     font-weight: 600;
@@ -594,9 +648,9 @@
   }
 
   .btn:active { transform: scale(.972); }
-  .btn-ghost { background: #26262e; color: var(--text); }
+  .btn-ghost { background: var(--ghost-bg); color: var(--text); }
   .btn-primary { background: var(--accent); color: var(--accent-ink); }
-  .btn-danger { background: none; border: 1px solid rgba(255, 123, 114, .35); color: var(--danger); }
+  .btn-danger { background: none; border: 1px solid var(--danger-line); color: var(--danger); }
   body.light .btn-danger { border-color: rgba(201, 75, 66, .4); }
   body.light .btn-danger:active { background: rgba(201, 75, 66, .08); }
 
@@ -673,9 +727,9 @@
     min-width: 0;
     height: clamp(32px, 4.6vh, 40px);
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, .07);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, .035);
+    border: 1px solid var(--btn-line);
+    border-radius: var(--r-day);
+    background: var(--btn-bg);
     color: var(--muted);
     font: inherit;
     font-size: 12.5px;
@@ -684,7 +738,7 @@
     transition: background .15s, color .15s;
   }
   .day.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
-  .day.weekend:not(.on) { color: #b9877f; }
+  .day.weekend:not(.on) { color: var(--weekend); }
 
   /* ————— Список будильников (средняя треть) ————— */
   .alist {
@@ -711,9 +765,9 @@
     margin-top: 6px;
     background: var(--surface);
     border: 1px solid var(--line);
-    border-radius: 10px;
+    border-radius: var(--r-group);
     overflow: hidden;
-    box-shadow: none;
+    box-shadow: var(--card-shadow);
   }
   .alist > .agroup:first-child { margin-top: 2px; }
 
@@ -732,13 +786,13 @@
     display: grid;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
+    border-radius: var(--r-badge);
     font-size: 11.5px;
     font-weight: 600;
     font-family: var(--mono);
     color: var(--muted);
-    background: rgba(255, 255, 255, .05);
-    border: 1px solid var(--line);
+    background: var(--badge-bg);
+    border: 1px solid var(--badge-line);
     font-variant-numeric: tabular-nums;
     transition: color .2s, background-color .2s;
   }
@@ -756,7 +810,7 @@
     padding: 12px 14px;
     position: relative;
     overflow: hidden;
-    border-bottom: 1px solid rgba(255, 255, 255, .05);
+    border-bottom: 1px solid var(--line);
   }
   .arow .rowdel {
     /* Красная кнопка удаления: компактная, у правого края строки,
@@ -806,14 +860,14 @@
     transition: background-color .18s var(--ease);
   }
   .arow:last-child { border-bottom: 0; }
-  .arow:active { background: rgba(255, 255, 255, .04); }
+  .arow:active { background: var(--press); }
   body.light .arow:active { background: rgba(20, 24, 12, .05); }
 
   .atime {
-    font-family: var(--mono);
+    font-family: var(--num-font);
     font-size: 29px;
-    font-weight: 500;
-    letter-spacing: -.045em;
+    font-weight: var(--num-weight);
+    letter-spacing: var(--num-spacing);
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     flex: 0 0 auto;
@@ -877,7 +931,7 @@
   .group-title:first-child { margin-top: 4px; }
   .set {
     padding: 13px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, .05);
+    border-bottom: 1px solid var(--line);
   }
   .set:last-child { border-bottom: 0; }
   .set-head {
@@ -887,7 +941,7 @@
     margin-bottom: 10px;
   }
   .set-head.nomargin { margin-bottom: 0; }
-  .set-title { font-size: 14.5px; color: #e6e6de; }
+  .set-title { font-size: 14.5px; color: var(--text); }
   .set-hint { margin-top: 3px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
   .set-value { margin-left: auto; font-size: 13px; color: var(--accent); white-space: nowrap; }
   .set .switch { margin-left: auto; }
@@ -896,10 +950,10 @@
   .chip {
     height: 36px;
     padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, .04);
-    color: #c9c9c0;
+    border: 1px solid var(--chip-line);
+    border-radius: var(--r-chip);
+    background: var(--chip-bg);
+    color: var(--chip-ink);
     font: inherit;
     font-size: 13px;
     cursor: pointer;
@@ -908,13 +962,102 @@
   .chip:active { transform: scale(.93); }
   .chip.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 
+  /* Выбор темы: три карточки с живыми миниатюрами */
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 10px 0 12px;
+  }
+  .theme-card {
+    min-width: 0;
+    padding: 5px;
+    border: 1px solid var(--btn-line);
+    border-radius: var(--r-chip);
+    background: var(--btn-bg);
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .18s, background .18s, transform .14s var(--ease);
+  }
+  .theme-card:active { transform: scale(.97); }
+  .theme-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .theme-card .mini {
+    height: 54px;
+    padding: 7px 8px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    overflow: hidden;
+  }
+  .theme-card .mini b {
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -.04em;
+    white-space: nowrap;
+  }
+  .theme-card .mini i {
+    display: block;
+    width: 62%;
+    height: 3px;
+    border-radius: 1px;
+  }
+  .theme-card .mini i.a { width: 34%; }
+  .theme-name {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 6px;
+    padding: 0 2px 1px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .theme-name em {
+    margin-left: auto;
+    font-style: normal;
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity .18s;
+  }
+  .theme-card.on .theme-name em { opacity: 1; }
+
+  /* миниатюры — тёмное исполнение */
+  .mini-console { background: #0a0b0d; color: #eceee7; }
+  .mini-console b { font-family: var(--mono); }
+  .mini-console i { background: rgba(255, 255, 255, .18); }
+  .mini-console i.a { background: #d7ff57; }
+  .mini-paper { background: #14110d; color: #f0e9db; }
+  .mini-paper b { font-family: Georgia, "Times New Roman", serif; letter-spacing: -.02em; }
+  .mini-paper i { background: rgba(240, 233, 219, .2); }
+  .mini-paper i.a { background: #d8744c; }
+  .mini-garden { background: #0f1410; color: #e8efe6; border-radius: 10px; }
+  .mini-garden b { font-weight: 300; letter-spacing: -.05em; }
+  .mini-garden i { background: rgba(232, 239, 230, .18); border-radius: 2px; }
+  .mini-garden i.a { background: #8fc7a6; }
+
+  /* миниатюры — светлое исполнение */
+  body.light .mini-console { background: #edeff0; color: #121419; }
+  body.light .mini-console i { background: rgba(18, 20, 25, .18); }
+  body.light .mini-console i.a { background: #2e8ef0; }
+  body.light .mini-paper { background: #f3efe6; color: #1c1915; }
+  body.light .mini-paper i { background: rgba(28, 25, 21, .2); }
+  body.light .mini-paper i.a { background: #b24a25; }
+  body.light .mini-garden { background: #eef1e8; color: #1d231e; }
+  body.light .mini-garden i { background: rgba(29, 35, 30, .2); }
+  body.light .mini-garden i.a { background: #2f6b4f; }
+
   .text-input {
     width: 100%;
     height: 44px;
     padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, .09);
-    border-radius: 13px;
-    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--field-line);
+    border-radius: var(--r-field);
+    background: var(--field-bg);
     color: var(--text);
     font: inherit;
     font-size: 15px;
@@ -922,7 +1065,7 @@
     -webkit-user-select: text;
     user-select: text;
   }
-  .text-input:focus { border-color: rgba(216, 255, 99, .55); }
+  .text-input:focus { border-color: var(--accent); }
   .text-input::placeholder { color: var(--dim); }
 
   input[type="range"] {
@@ -937,24 +1080,24 @@
     flex: 1;
     min-height: 46px;
     padding: 8px 12px;
-    border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, .05);
+    border: 1px solid var(--chip-line);
+    border-radius: var(--r-field);
+    background: var(--chip-bg);
     color: var(--text);
     font: inherit;
     font-size: 13.5px;
     cursor: pointer;
     transition: background-color .18s, color .18s, border-color .18s, transform .16s var(--ease);
   }
-  .btn-sm:active { transform: scale(.96); background: rgba(255, 255, 255, .1); }
+  .btn-sm:active { transform: scale(.96); background: var(--press-strong); }
   .btn-sm[disabled] { opacity: .35; pointer-events: none; }
   .btn-sm.accent { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
 
   .health { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
-  .health + .health { border-top: 1px solid rgba(255, 255, 255, .05); }
+  .health + .health { border-top: 1px solid var(--line); }
   .hdot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; }
   .hdot.bad { background: var(--danger); }
-  .htext { flex: 1; min-width: 0; font-size: 13.5px; color: #dcdcd4; }
+  .htext { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text); }
   .htext small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
   .health .btn-sm { flex: 0 0 auto; min-height: 36px; padding: 4px 14px; }
 
@@ -979,94 +1122,326 @@
     gap: 4px;
     margin-top: 10px;
     padding: 15px 18px;
-    border: 1px solid rgba(255, 255, 255, .08);
-    border-radius: 17px;
-    background: rgba(255, 255, 255, .04);
+    border: 1px solid var(--line);
+    border-radius: var(--r-field);
+    background: var(--surface);
     color: var(--text);
     font: inherit;
     text-align: left;
     cursor: pointer;
   }
-  .choice:active { background: rgba(255, 255, 255, .09); }
+  .choice:active { background: var(--press-strong); }
   .choice-title { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
   .choice-sub { font-size: 12.5px; line-height: 1.35; color: var(--muted); }
 
-  /* ————— Светлая тема ————— */
+  /* ————— «Пульт» · светлое исполнение — голубой акцент ————— */
   body.light {
     --bg: #edeff0;
     --surface: #ffffff;
     --surface-2: #e3e6e8;
     --line: rgba(18, 20, 25, .12);
+    --line-strong: rgba(18, 20, 25, .26);
     --text: #121419;
     --muted: #5c626b;
     --dim: #8a909a;
     --accent: #2e8ef0;
     --accent-ink: #ffffff;
     --danger: #c0392b;
+
+    --track: #d5d9dd;
+    --knob: #ffffff;
+    --knob-on: #ffffff;
+    --badge-bg: #e9e9ef;
+    --badge-line: transparent;
+    --field-bg: #ffffff;
+    --field-line: rgba(18, 20, 25, .16);
+    --ghost-bg: #e6e6e1;
+    --btn-bg: rgba(20, 24, 12, .04);
+    --btn-line: rgba(18, 20, 25, .12);
+    --chip-bg: rgba(20, 24, 12, .04);
+    --chip-line: rgba(18, 20, 25, .12);
+    --chip-ink: #43443a;
+    --press: rgba(20, 24, 12, .05);
+    --press-strong: rgba(20, 24, 12, .1);
+    --overlay: rgba(235, 235, 235, .62);
+    --sheet-shadow: 0 -24px 60px rgba(30, 30, 40, .18);
+    --card-shadow: 0 14px 34px -22px rgba(30, 30, 50, .35);
+    --dot-off: #c2c2c8;
+    --dot-mid: #a9aab1;
+    --status-active: #43443a;
+    --time-off: #b6b6bd;
+    --icon-ink: #43443a;
+    --radio: #9b9ca4;
+    --grabber: #c8c8cf;
+    --weekend: #a34f46;
+    --toast-bg: #1c1d22;
+    --toast-ink: #f4f3ef;
+    --accent-icon: rgba(255, 255, 255, .22);
+    --danger-line: rgba(192, 57, 43, .4);
+    --danger-bg: rgba(192, 57, 43, .08);
+    --tick: rgba(18, 20, 25, .17);
+    --tick-major: rgba(18, 20, 25, .3);
+    --accent-glow: 0 0 12px rgba(46, 142, 240, .5);
+
     color-scheme: light;
-    background: #edeff0;
+    background: var(--bg);
   }
-  body.light .agroup {
-    box-shadow: 0 14px 34px -22px rgba(30, 30, 50, .35);
-    border-color: rgba(20, 24, 12, .05);
+
+  /* =====================================================================
+     ТЕМА «БУМАГА» — тёплая, редакционная: антиква, тонкие линейки
+     ===================================================================== */
+  body[data-theme="paper"] {
+    --bg: #14110d;
+    --surface: #1d1915;
+    --surface-2: #262019;
+    --line: rgba(240, 233, 219, .16);
+    --line-strong: rgba(240, 233, 219, .3);
+    --text: #f0e9db;
+    --muted: #a79c8b;
+    --dim: #7d7263;
+    --accent: #d8744c;
+    --accent-ink: #17130f;
+    --danger: #e0796e;
+
+    --track: #3a332b;
+    --knob: #a79c8b;
+    --knob-on: #17130f;
+    --badge-bg: rgba(240, 233, 219, .06);
+    --badge-line: rgba(240, 233, 219, .16);
+    --field-bg: rgba(240, 233, 219, .05);
+    --field-line: rgba(240, 233, 219, .18);
+    --ghost-bg: #2a231b;
+    --btn-bg: rgba(240, 233, 219, .045);
+    --btn-line: rgba(240, 233, 219, .14);
+    --chip-bg: rgba(240, 233, 219, .05);
+    --chip-line: rgba(240, 233, 219, .16);
+    --chip-ink: #d8cfc0;
+    --press: rgba(240, 233, 219, .05);
+    --press-strong: rgba(240, 233, 219, .1);
+    --overlay: rgba(6, 4, 2, .64);
+    --sheet-shadow: 0 -24px 60px rgba(0, 0, 0, .5);
+    --card-shadow: none;
+    --dot-off: #40382e;
+    --dot-mid: #453c31;
+    --status-active: #ded3c1;
+    --time-off: #5c5347;
+    --icon-ink: #d8cfc0;
+    --radio: #6b6153;
+    --grabber: #3f372c;
+    --weekend: #c08a7d;
+    --toast-bg: #f0e9db;
+    --toast-ink: #14110d;
+    --accent-icon: rgba(23, 19, 15, .18);
+    --danger-line: rgba(224, 121, 110, .4);
+    --danger-bg: rgba(224, 121, 110, .1);
+    --tick: rgba(240, 233, 219, .18);
+    --tick-major: rgba(240, 233, 219, .34);
+    --accent-glow: 0 0 12px rgba(216, 116, 76, .45);
+
+    --num-font: Georgia, "Times New Roman", serif;
+    --num-weight: 400;
+    --num-spacing: -.035em;
+    --head-font: Georgia, "Times New Roman", serif;
+
+    --r-sheet: 14px;
+    --r-card: 4px;
+    --r-group: 4px;
+    --r-btn: 3px;
+    --r-chip: 3px;
+    --r-field: 4px;
+    --r-action: 4px;
+    --r-switch: 3px;
+    --r-badge: 3px;
+    --r-day: 3px;
+    --r-knob: 2px;
   }
-  body.light .anum { background: #e9e9ef; border-color: transparent; }
+  body[data-theme="paper"].light {
+    --bg: #f3efe6;
+    --surface: #fbf8f1;
+    --surface-2: #eee7da;
+    --line: rgba(28, 25, 21, .14);
+    --line-strong: rgba(28, 25, 21, .28);
+    --text: #1c1915;
+    --muted: #6f675a;
+    --dim: #948a79;
+    --accent: #b24a25;
+    --accent-ink: #fbf8f1;
+    --danger: #a02f26;
 
-  body.light .dot { background: #c2c2c8; }
-  body.light .app.active .dot { box-shadow: 0 0 12px rgba(46, 142, 240, .5); }
-  body.light .app.active #statusText { color: #43443a; }
-  body.light .power { border-color: rgba(20, 24, 12, .14); background: rgba(20, 24, 12, .04); color: #8b8c94; }
-  body.light .power.on { color: var(--accent-ink); }
-  body.light .app:not(.active) .time { color: #b6b6bd; }
-  body.light .meta .mid { background: #a9aab1; }
-  body.light .card { background: #ffffff; border-color: rgba(20, 24, 12, .09); }
-  body.light .row:active { background: rgba(20, 24, 12, .05); }
-  body.light .icon { color: #43443a; background: rgba(20, 24, 12, .05); }
-  body.light .switch { background: #d9d9de; border-color: rgba(20, 24, 12, .1); }
-  body.light .switch span { background: #ffffff; }
-  body.light .snooze { color: var(--accent-ink); box-shadow: none; }
-  body.light .snooze .act-icon { background: rgba(255, 255, 255, .22); }
-  body.light .disable { background: var(--surface-2); border-color: rgba(201, 75, 66, .35); color: var(--danger); }
-  body.light .disable .act-icon { background: rgba(201, 75, 66, .09); }
-  body.light .overlay { background: rgba(235, 235, 231, .62); }
-  body.light .sheet { background: var(--surface); box-shadow: 0 -24px 60px rgba(30, 30, 40, .18); }
-  body.light .grabber { background: #c8c8cf; }
-  body.light .close { background: rgba(20, 24, 12, .06); color: #5b5c64; }
-  body.light .sound { border-bottom-color: rgba(20, 24, 12, .07); }
-  body.light .sound-title { color: var(--text); }
-  body.light .radio { border-color: #9b9ca4; }
-  body.light .play { background: rgba(20, 24, 12, .05); color: #43443a; }
-  body.light .play:active { background: rgba(20, 24, 12, .12); }
-  body.light .btn-ghost { background: #e6e6e1; color: var(--text); }
-  body.light .toast { background: #1c1d22; color: #f4f3ef; box-shadow: 0 14px 40px rgba(30, 30, 20, .3); }
-  body.light .day { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: #5f6068; }
-  body.light .day.on { color: var(--accent-ink); }
-  body.light .day.weekend:not(.on) { color: #a34f46; }
-  body.light .set { border-bottom-color: rgba(20, 24, 12, .07); }
-  body.light .set-title { color: var(--text); }
-  body.light .chip { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: #43443a; }
-  body.light .chip.on { color: var(--accent-ink); }
-  body.light .text-input { background: #ffffff; border-color: rgba(20, 24, 12, .16); color: var(--text); }
-  body.light .btn-sm { background: rgba(20, 24, 12, .04); border-color: rgba(20, 24, 12, .12); color: var(--text); }
-  body.light .btn-sm:active { background: rgba(20, 24, 12, .1); }
-  body.light .btn-sm.accent { background: #2E8EF0; color: #ffffff; }
+    --track: #ded7c9;
+    --knob: #fbf8f1;
+    --knob-on: #fbf8f1;
+    --badge-bg: rgba(28, 25, 21, .05);
+    --badge-line: rgba(28, 25, 21, .12);
+    --field-bg: #ffffff;
+    --field-line: rgba(28, 25, 21, .18);
+    --ghost-bg: #e7dfd1;
+    --btn-bg: rgba(28, 25, 21, .04);
+    --btn-line: rgba(28, 25, 21, .12);
+    --chip-bg: rgba(28, 25, 21, .04);
+    --chip-line: rgba(28, 25, 21, .12);
+    --chip-ink: #4a4235;
+    --press: rgba(28, 25, 21, .05);
+    --press-strong: rgba(28, 25, 21, .1);
+    --overlay: rgba(240, 235, 225, .66);
+    --sheet-shadow: 0 -24px 60px rgba(60, 40, 20, .2);
+    --card-shadow: none;
+    --dot-off: #cfc7b8;
+    --dot-mid: #cfc7b8;
+    --status-active: #4a4235;
+    --time-off: #b8ae9d;
+    --icon-ink: #4a4235;
+    --radio: #a99e8c;
+    --grabber: #d3cabb;
+    --weekend: #9c4a3a;
+    --toast-bg: #1c1915;
+    --toast-ink: #f3efe6;
+    --accent-icon: rgba(251, 248, 241, .28);
+    --danger-line: rgba(160, 47, 38, .35);
+    --danger-bg: rgba(160, 47, 38, .07);
+    --tick: rgba(28, 25, 21, .2);
+    --tick-major: rgba(28, 25, 21, .35);
+    --accent-glow: 0 0 12px rgba(178, 74, 37, .35);
 
-  /* В светлой теме выбранное выделяется голубым (в тёмной — лаймовым). */
-  body.light .chip.on { background: #2E8EF0; color: #ffffff; border-color: transparent; }
-  body.light .day.on { background: #2E8EF0; color: #ffffff; border-color: transparent; }
-  body.light .switch[aria-checked="true"] { background: #2E8EF0; border-color: transparent; }
-  body.light .switch[aria-checked="true"] span { background: #ffffff; }
-  body.light .sound.selected .radio { border-color: #2E8EF0; background: #2E8EF0; }
-  body.light .sound.selected .radio::after { background: #ffffff; }
-  body.light .set-value { color: #2E8EF0; }
-  body.light .text-input:focus { border-color: rgba(46, 142, 240, .6); }
-  body.light input[type="range"] { accent-color: #2E8EF0; }
-  body.light .hdot { background: #2E8EF0; }
-  body.light .hdot.bad { background: var(--danger); }
-  body.light .health + .health { border-top-color: rgba(20, 24, 12, .07); }
-  body.light .htext { color: var(--text); }
-  body.light .choice { background: #ffffff; border-color: rgba(20, 24, 12, .12); }
-  body.light .choice:active { background: #f0f0ec; }
+    color-scheme: light;
+    background: var(--bg);
+  }
+  body[data-theme="paper"] .statusline {
+    border-bottom: 3px double var(--line-strong);
+    padding-bottom: 9px;
+  }
+  body[data-theme="paper"] .arow,
+  body[data-theme="paper"] .set {
+    border-bottom-style: dotted;
+    border-bottom-color: var(--line-strong);
+  }
+  body[data-theme="paper"] .grouptitle {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400;
+    letter-spacing: .18em;
+    font-size: 10.5px;
+  }
+  body[data-theme="paper"] .set-title { font-family: Georgia, "Times New Roman", serif; }
+
+  /* =====================================================================
+     ТЕМА «САД» — мягкая: спокойные формы, лесной акцент, дуга дня
+     ===================================================================== */
+  body[data-theme="garden"] {
+    --bg: #0f1410;
+    --surface: #171e18;
+    --surface-2: #1f2821;
+    --line: rgba(232, 239, 230, .12);
+    --line-strong: rgba(232, 239, 230, .26);
+    --text: #e8efe6;
+    --muted: #93a091;
+    --dim: #6d7a6d;
+    --accent: #8fc7a6;
+    --accent-ink: #0f1712;
+    --danger: #e38b84;
+
+    --track: #46544a;
+    --knob: #93a091;
+    --knob-on: #0f1712;
+    --badge-bg: rgba(232, 239, 230, .06);
+    --badge-line: rgba(232, 239, 230, .12);
+    --field-bg: rgba(232, 239, 230, .06);
+    --field-line: rgba(232, 239, 230, .14);
+    --ghost-bg: #232d24;
+    --btn-bg: rgba(232, 239, 230, .05);
+    --btn-line: rgba(232, 239, 230, .12);
+    --chip-bg: rgba(232, 239, 230, .05);
+    --chip-line: rgba(232, 239, 230, .12);
+    --chip-ink: #c6d2c2;
+    --press: rgba(232, 239, 230, .05);
+    --press-strong: rgba(232, 239, 230, .1);
+    --overlay: rgba(4, 8, 5, .62);
+    --sheet-shadow: 0 -24px 60px rgba(0, 0, 0, .5);
+    --card-shadow: 0 10px 30px -18px rgba(0, 0, 0, .55);
+    --dot-off: #38443b;
+    --dot-mid: #38443b;
+    --status-active: #cfdccb;
+    --time-off: #55635a;
+    --icon-ink: #c6d2c2;
+    --radio: #5d6c60;
+    --grabber: #3a473d;
+    --weekend: #c98f88;
+    --toast-bg: #e8efe6;
+    --toast-ink: #0f1410;
+    --accent-icon: rgba(15, 23, 18, .2);
+    --danger-line: rgba(227, 139, 132, .4);
+    --danger-bg: rgba(227, 139, 132, .1);
+    --tick: rgba(232, 239, 230, .16);
+    --tick-major: rgba(232, 239, 230, .3);
+    --accent-glow: 0 0 12px rgba(143, 199, 166, .45);
+
+    --num-font: inherit;
+    --num-weight: 250;
+    --num-spacing: -.05em;
+    --head-font: inherit;
+
+    --r-sheet: 22px;
+    --r-card: 18px;
+    --r-group: 18px;
+    --r-btn: 999px;
+    --r-chip: 999px;
+    --r-field: 12px;
+    --r-action: 999px;
+    --r-switch: 999px;
+    --r-badge: 999px;
+    --r-day: 999px;
+    --r-knob: 50%;
+  }
+  body[data-theme="garden"].light {
+    --bg: #eef1e8;
+    --surface: #f9faf4;
+    --surface-2: #e3e8da;
+    --line: rgba(29, 35, 30, .1);
+    --line-strong: rgba(29, 35, 30, .22);
+    --text: #1d231e;
+    --muted: #5a665b;
+    --dim: #8c968c;
+    --accent: #2f6b4f;
+    --accent-ink: #f4f8f1;
+    --danger: #a6453f;
+
+    --track: #d9ded2;
+    --knob: #ffffff;
+    --knob-on: #ffffff;
+    --badge-bg: rgba(29, 35, 30, .05);
+    --badge-line: rgba(29, 35, 30, .1);
+    --field-bg: #ffffff;
+    --field-line: rgba(29, 35, 30, .16);
+    --ghost-bg: #e6ebdc;
+    --btn-bg: rgba(29, 35, 30, .04);
+    --btn-line: rgba(29, 35, 30, .1);
+    --chip-bg: rgba(29, 35, 30, .04);
+    --chip-line: rgba(29, 35, 30, .1);
+    --chip-ink: #4a554a;
+    --press: rgba(29, 35, 30, .05);
+    --press-strong: rgba(29, 35, 30, .1);
+    --overlay: rgba(238, 241, 232, .66);
+    --sheet-shadow: 0 -24px 60px rgba(20, 40, 25, .18);
+    --card-shadow: 0 10px 26px -18px rgba(20, 40, 25, .35);
+    --dot-off: #cbd3c8;
+    --dot-mid: #cbd3c8;
+    --status-active: #4a554a;
+    --time-off: #b3bdae;
+    --icon-ink: #4a554a;
+    --radio: #97a396;
+    --grabber: #ccd4c6;
+    --weekend: #9c5a52;
+    --toast-bg: #1d231e;
+    --toast-ink: #eef1e8;
+    --accent-icon: rgba(244, 248, 241, .3);
+    --danger-line: rgba(166, 69, 63, .35);
+    --danger-bg: rgba(166, 69, 63, .07);
+    --tick: rgba(29, 35, 30, .18);
+    --tick-major: rgba(29, 35, 30, .32);
+    --accent-glow: 0 0 12px rgba(47, 107, 79, .35);
+
+    color-scheme: light;
+    background: var(--bg);
+  }
 
   .set-head .chips { margin-left: auto; }
 
@@ -1338,12 +1713,29 @@
       <div class="set">
         <div class="set-head nomargin">
           <span class="set-title">Тема</span>
-          <div class="chips" data-key="theme">
-            <button class="chip" type="button" data-v="0">Тёмная</button>
-            <button class="chip" type="button" data-v="1">Светлая</button>
+        </div>
+        <div class="theme-grid" id="themeGrid">
+          <button class="theme-card" type="button" data-theme-id="0" aria-label="Тема Пульт" aria-pressed="false">
+            <span class="mini mini-console"><b>7:30</b><i></i><i class="a"></i></span>
+            <span class="theme-name">Пульт<em>✓</em></span>
+          </button>
+          <button class="theme-card" type="button" data-theme-id="1" aria-label="Тема Бумага" aria-pressed="false">
+            <span class="mini mini-paper"><b>7:30</b><i></i><i class="a"></i></span>
+            <span class="theme-name">Бумага<em>✓</em></span>
+          </button>
+          <button class="theme-card" type="button" data-theme-id="2" aria-label="Тема Сад" aria-pressed="false">
+            <span class="mini mini-garden"><b>7:30</b><i></i><i class="a"></i></span>
+            <span class="theme-name">Сад<em>✓</em></span>
+          </button>
+        </div>
+        <div class="set-head nomargin">
+          <span class="set-title">Исполнение</span>
+          <div class="chips" data-key="light">
+            <button class="chip" type="button" data-v="0">Тёмное</button>
+            <button class="chip" type="button" data-v="1">Светлое</button>
           </div>
         </div>
-        <div class="set-hint">Тема применяется и к экрану звонка.</div>
+        <div class="set-hint">Тема и исполнение применяются ко всему приложению и к экрану звонка.</div>
       </div>
 
       <div class="group-title">Обновления</div>

@@ -21,7 +21,8 @@
     autoStopMinutes: 10,
     challenge: false,
     challengeNumbers: 2,
-    theme: 0,
+    theme: 0,        /* 0 — «Пульт», 1 — «Бумага», 2 — «Сад» */
+    light: false,    /* исполнение внутри выбранной темы */
     updateCheck: false,
     alarms: []   /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
   };
@@ -139,7 +140,14 @@
       result.autoStopMinutes = clamp(parseInt(num(s.autoStopMinutes, 10), 10), 0, 120);
       result.challenge = !!s.challenge;
       result.challengeNumbers = clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 4);
-      result.theme = num(s.theme, 0) === 1 ? 1 : 0;
+      if (typeof s.light === 'boolean') {
+        result.theme = clamp(parseInt(num(s.theme, 0), 10), 0, 2);
+        result.light = s.light;
+      } else {
+        /* 2.11 и раньше: theme 0 — тёмная, 1 — светлая */
+        result.theme = 0;
+        result.light = num(s.theme, 0) === 1;
+      }
       result.updateCheck = !!s.updateCheck;
       if (Array.isArray(s.alarms)) {
         for (var a = 0; a < s.alarms.length && result.alarms.length < MAX_ALARMS; a++) {
@@ -189,7 +197,8 @@
       autoStopMinutes: clamp(parseInt(num(s.autoStopMinutes, 10), 10), 0, 120),
       challenge: !!s.challenge,
       challengeNumbers: clamp(parseInt(num(s.challengeNumbers, 2), 10), 2, 4),
-      theme: num(s.theme, 0) === 1 ? 1 : 0,
+      theme: 0,
+      light: num(s.theme, 0) === 1,
       alarms: []
     };
     /* Старый будильник мигрирует как id 1 — нативная сторона делает то же самое. */
@@ -340,14 +349,29 @@
     tickMark.style.left = pct + '%';
   }
 
-  /* ————— Тема ————— */
+  /* ————— Тема и исполнение ————— */
+  var THEME_IDS = ['console', 'paper', 'garden'];
+  /* Фон для системных баров: [тёмное, светлое] */
+  var THEME_BG = {
+    console: ['#0a0b0d', '#edeff0'],
+    paper: ['#14110d', '#f3efe6'],
+    garden: ['#0f1410', '#eef1e8']
+  };
+
   function applyTheme() {
-    var light = state.theme === 1;
+    var id = clamp(parseInt(num(state.theme, 0), 10), 0, 2);
+    state.theme = id;
+    var light = !!state.light;
+    var name = THEME_IDS[id];
+    document.body.setAttribute('data-theme', name);
     document.body.classList.toggle('light', light);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', light ? '#edeff0' : '#0a0b0d');
+    if (meta) meta.setAttribute('content', THEME_BG[name][light ? 1 : 0]);
     var scheme = document.querySelector('meta[name="color-scheme"]');
     if (scheme) scheme.setAttribute('content', light ? 'light' : 'dark');
+    if (bridge && typeof bridge.applyThemeMode === 'function') {
+      try { bridge.applyThemeMode(id, light); return; } catch (e) { /* старый мост */ }
+    }
     if (bridge && typeof bridge.applyTheme === 'function') {
       try { bridge.applyTheme(light); } catch (e) { /* нет моста */ }
     }
@@ -780,8 +804,15 @@
       var key = groups[g].getAttribute('data-key');
       var chips = groups[g].querySelectorAll('.chip');
       for (var i = 0; i < chips.length; i++) {
-        chips[i].classList.toggle('on', Number(chips[i].getAttribute('data-v')) === state[key]);
+        var v = Number(chips[i].getAttribute('data-v'));
+        chips[i].classList.toggle('on', key === 'light' ? (v === 1) === !!state.light : v === state[key]);
       }
+    }
+    var cards = moreOverlay.querySelectorAll('.theme-card');
+    for (var tc = 0; tc < cards.length; tc++) {
+      var on = Number(cards[tc].getAttribute('data-theme-id')) === state.theme;
+      cards[tc].classList.toggle('on', on);
+      cards[tc].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     $('updateSwitch').setAttribute('aria-checked', state.updateCheck ? 'true' : 'false');
   }
@@ -1458,11 +1489,30 @@
       var chip = event.target.closest ? event.target.closest('.chip') : null;
       if (!chip) return;
       var key = event.currentTarget.getAttribute('data-key');
-      state[key] = Number(chip.getAttribute('data-v'));
+      if (key === 'light') {
+        state.light = Number(chip.getAttribute('data-v')) === 1;
+      } else {
+        state[key] = Number(chip.getAttribute('data-v'));
+      }
       saveState();
+      applyTheme();
       render();
       pushSettings();
-      if (key === 'theme') applyTheme();
+      haptic(8);
+    });
+  }
+
+  /* Выбор темы карточкой с миниатюрой */
+  var themeCards = moreOverlay.querySelectorAll('.theme-card');
+  for (var tc = 0; tc < themeCards.length; tc++) {
+    themeCards[tc].addEventListener('click', function () {
+      var id = Number(this.getAttribute('data-theme-id'));
+      state.theme = clamp(parseInt(num(id, 0), 10), 0, 2);
+      saveState();
+      applyTheme();
+      render();
+      pushSettings();
+      haptic(10);
     });
   }
 

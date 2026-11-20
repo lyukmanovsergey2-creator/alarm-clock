@@ -81,7 +81,8 @@ public class RingActivity extends Activity {
             alarmId = 0;
         }
 
-        applyPalette(AlarmScheduler.prefs(this).getBoolean("lightTheme", false));
+        applyPalette(AlarmScheduler.prefs(this).getInt("themeId", 0),
+                AlarmScheduler.prefs(this).getBoolean("lightTheme", false));
 
         if (Build.VERSION.SDK_INT >= 27) {
             setShowWhenLocked(true);
@@ -119,24 +120,53 @@ public class RingActivity extends Activity {
         }
     }
 
-    private void applyPalette(boolean light) {
-        if (light) {
-            BG = Color.parseColor("#EDEFF0");
-            TEXT = Color.parseColor("#121419");
-            MUTED = Color.parseColor("#5C626B");
-            ACCENT = Color.parseColor("#2E8EF0");
-            DANGER = Color.parseColor("#C0392B");
-        } else {
-            BG = Color.parseColor("#0A0B0D");
-            TEXT = Color.parseColor("#ECEEE7");
-            MUTED = Color.parseColor("#868B93");
-            ACCENT = Color.parseColor("#D7FF57");
-            DANGER = Color.parseColor("#FF6B5E");
+    /** Тема 0 — «Пульт», 1 — «Бумага», 2 — «Сад»; light — исполнение. */
+    private void applyPalette(int themeId, boolean light) {
+        String bg, text, muted, accent, danger, onAccent, keyBg, disableBg;
+        switch (themeId) {
+            case 1: /* Бумага */
+                if (light) {
+                    bg = "#F3EFE6"; text = "#1C1915"; muted = "#6F675A";
+                    accent = "#B24A25"; danger = "#A02F26";
+                    onAccent = "#FBF8F1"; keyBg = "#EEE7DA"; disableBg = "#FFFFFF";
+                } else {
+                    bg = "#14110D"; text = "#F0E9DB"; muted = "#A79C8B";
+                    accent = "#D8744C"; danger = "#E0796E";
+                    onAccent = "#17130F"; keyBg = "#262019"; disableBg = "#1D1915";
+                }
+                break;
+            case 2: /* Сад */
+                if (light) {
+                    bg = "#EEF1E8"; text = "#1D231E"; muted = "#5A665B";
+                    accent = "#2F6B4F"; danger = "#A6453F";
+                    onAccent = "#F4F8F1"; keyBg = "#E3E8DA"; disableBg = "#F9FAF4";
+                } else {
+                    bg = "#0F1410"; text = "#E8EFE6"; muted = "#93A091";
+                    accent = "#8FC7A6"; danger = "#E38B84";
+                    onAccent = "#0F1712"; keyBg = "#1F2821"; disableBg = "#171E18";
+                }
+                break;
+            default: /* Пульт */
+                if (light) {
+                    bg = "#EDEFF0"; text = "#121419"; muted = "#5C626B";
+                    accent = "#2E8EF0"; danger = "#C0392B";
+                    onAccent = "#FFFFFF"; keyBg = "#E3E6E8"; disableBg = "#FFFFFF";
+                } else {
+                    bg = "#0A0B0D"; text = "#ECEEE7"; muted = "#868B93";
+                    accent = "#D7FF57"; danger = "#FF6B5E";
+                    onAccent = "#0A0B0D"; keyBg = "#191C21"; disableBg = "#191C21";
+                }
+                break;
         }
-        ON_ACCENT = Color.parseColor(light ? "#FFFFFF" : "#0A0B0D");
-        KEY_BG = light ? Color.parseColor("#E3E6E8") : Color.parseColor("#191C21");
-        DISABLE_BG = light ? Color.parseColor("#FFFFFF") : Color.parseColor("#191C21");
-        DISABLE_STROKE = light ? Color.parseColor("#4DC0392B") : Color.parseColor("#33FF6B5E");
+        BG = Color.parseColor(bg);
+        TEXT = Color.parseColor(text);
+        MUTED = Color.parseColor(muted);
+        ACCENT = Color.parseColor(accent);
+        DANGER = Color.parseColor(danger);
+        ON_ACCENT = Color.parseColor(onAccent);
+        KEY_BG = Color.parseColor(keyBg);
+        DISABLE_BG = Color.parseColor(disableBg);
+        DISABLE_STROKE = (DANGER & 0x00FFFFFF) | (light ? 0x4D000000 : 0x33000000);
     }
 
     private View buildInterface() {

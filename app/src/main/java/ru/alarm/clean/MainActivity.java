@@ -128,7 +128,24 @@ public class MainActivity extends Activity {
 
     /** Окрашивает системные бары под выбранную тему (вызывается и из NativeBridge). */
     void applyThemeColors(boolean light) {
-        appBackground = Color.parseColor(light ? "#EDEFF0" : "#0A0B0D");
+        applyThemeColors(AlarmScheduler.prefs(this).getInt("themeId", 0), light);
+    }
+
+    /** Тема 0 — «Пульт», 1 — «Бумага», 2 — «Сад»; light — исполнение. */
+    void applyThemeColors(int themeId, boolean light) {
+        String bg;
+        switch (themeId) {
+            case 1:
+                bg = light ? "#F3EFE6" : "#14110D";
+                break;
+            case 2:
+                bg = light ? "#EEF1E8" : "#0F1410";
+                break;
+            default:
+                bg = light ? "#EDEFF0" : "#0A0B0D";
+                break;
+        }
+        appBackground = Color.parseColor(bg);
         Window window = getWindow();
         window.setStatusBarColor(appBackground);
         window.setNavigationBarColor(appBackground);

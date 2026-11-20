@@ -583,17 +583,28 @@ public class NativeBridge {
     }
 
     /* ————— Тема ————— */
+    /** Выбор темы (0 — «Пульт», 1 — «Бумага», 2 — «Сад») и исполнения. */
     @JavascriptInterface
-    public void applyTheme(final boolean light) {
-        AlarmScheduler.prefs(activity).edit().putBoolean("lightTheme", light).apply();
+    public void applyThemeMode(final int themeId, final boolean light) {
+        int id = themeId < 0 || themeId > 2 ? 0 : themeId;
+        AlarmScheduler.prefs(activity).edit()
+                .putInt("themeId", id)
+                .putBoolean("lightTheme", light)
+                .apply();
         mainHandler.post(new Runnable() {
             @Override
             public void run() {
                 if (activity instanceof MainActivity) {
-                    ((MainActivity) activity).applyThemeColors(light);
+                    ((MainActivity) activity).applyThemeColors(themeId, light);
                 }
             }
         });
+    }
+
+    /** Совместимость с прежним вызовом (только исполнение). */
+    @JavascriptInterface
+    public void applyTheme(final boolean light) {
+        applyThemeMode(AlarmScheduler.prefs(activity).getInt("themeId", 0), light);
     }
 
     /* ————— Необязательная проверка обновлений ————— */
