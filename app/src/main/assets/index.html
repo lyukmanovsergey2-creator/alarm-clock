@@ -525,38 +525,6 @@
     flex: 0 0 auto;
   }
 
-  .sound-target {
-    display: flex;
-    gap: 4px;
-    flex: 0 0 auto;
-    margin: 0 0 10px;
-    padding: 4px;
-    border-radius: var(--r-field);
-    background: var(--btn-bg);
-  }
-
-  .sound-target[hidden] { display: none; }
-
-  .sound-target .seg {
-    flex: 1;
-    min-height: 36px;
-    padding: 6px 10px;
-    border: 0;
-    border-radius: calc(var(--r-field) - 2px);
-    background: none;
-    color: var(--muted);
-    font: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background-color .18s, color .18s;
-  }
-
-  .sound-target .seg.on {
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 600;
-  }
-
   .sound-list {
     min-height: 0;
     overflow-y: auto;
@@ -703,6 +671,7 @@
   }
   .setrow .chev { color: var(--dim); display: grid; place-items: center; }
   .setrow .chev svg { width: 16px; height: 16px; }
+  .set .setrow + .setrow { border-top: 1px solid var(--line); }
 
   .toast {
     position: fixed;
@@ -1715,28 +1684,6 @@
 </div>
 
 <!-- Звук -->
-<div class="overlay" id="soundOverlay" aria-hidden="true">
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="soundTitle">
-    <div class="grabber"></div>
-    <div class="sheet-head">
-      <h2 id="soundTitle">Звук будильника</h2>
-      <button class="close" type="button" data-close="sound" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-      </button>
-    </div>
-    <div class="sound-target" id="soundTarget" role="group" aria-label="Какой звук настраиваем">
-      <button class="seg on" type="button" data-sound-mode="primary">Основной</button>
-      <button class="seg" type="button" data-sound-mode="fallback">Запасной</button>
-    </div>
-    <p class="hint" id="soundHint">Системные звуки будильника вашего устройства</p>
-    <div class="sound-list" id="soundList"></div>
-    <button class="btn-sm add-file" id="addFileBtn" type="button">+ Выбрать свой файл…</button>
-    <div class="sheet-actions">
-      <button class="btn btn-primary" type="button" data-close="sound">Готово</button>
-    </div>
-  </div>
-</div>
-
 <!-- Настройки -->
 <div class="overlay" id="moreOverlay" aria-hidden="true">
   <div class="sheet tall" role="dialog" aria-modal="true" aria-labelledby="moreTitle">
@@ -1748,6 +1695,33 @@
       </button>
     </div>
     <div class="sheet-scroll" id="moreScroll">
+
+      <div class="group-title">Звук</div>
+      <div class="set">
+        <button class="setrow" id="sPrimaryRow" type="button">
+          <span class="labels">
+            <span class="set-title">Основной звук</span>
+            <span class="set-hint" id="sPrimaryValue">По умолчанию</span>
+          </span>
+          <span class="chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+          </span>
+        </button>
+        <button class="setrow" id="sFallbackRow" type="button">
+          <span class="labels">
+            <span class="set-title">Запасной звук</span>
+            <span class="set-hint" id="sFallbackValue">Не выбран</span>
+          </span>
+          <span class="chev" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M9 6l6 6-6 6"/>
+            </svg>
+          </span>
+        </button>
+        <div class="set-hint">Запасной включается, если основной звук недоступен: файл удалён или ссылка не открылась.</div>
+      </div>
 
       <div class="group-title">Оформление</div>
       <div class="set">
@@ -1807,6 +1781,24 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="soundOverlay" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="soundTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="soundTitle">Звук будильника</h2>
+      <button class="close" type="button" data-close="sound" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="hint" id="soundHint">Системные звуки будильника вашего устройства</p>
+    <div class="sound-list" id="soundList"></div>
+    <button class="btn-sm add-file" id="addFileBtn" type="button">+ Выбрать свой файл…</button>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" type="button" data-close="sound">Готово</button>
     </div>
   </div>
 </div>

@@ -50,7 +50,6 @@
 
   var soundOverlay = $('soundOverlay');
   var soundList = $('soundList');
-  var soundTarget = $('soundTarget');
   var soundHint = $('soundHint');
   var moreOverlay = $('moreOverlay');
   var disableOverlay = $('disableOverlay');
@@ -64,8 +63,8 @@
   var alarmSaveBtn = $('alarmSave');
   var deleteAlarmBtn = $('deleteAlarmBtn');
   var alarmTitle = $('alarmTitle');
-  /* Куда пишется выбор мелодии: 'global' (по умолчанию) или 'alarm' (редактор будильника) */
-  var picking = 'global';
+  /* Куда пишется выбор мелодии: 'primary', 'fallback' или 'alarm' (редактор) */
+  var picking = 'primary';
   /* Рабочая копия сигнализации в редакторе */
   var editAlarm = null;
   var openSwipe = null; /* открытая строка (свайп-удаление) */
@@ -73,31 +72,23 @@
   var swiping = false;  /* активный жест свайпа — рендер списка отложен */
 
   var bridge = window.NativeAlarm || null;
-  var soundMode = 'primary'; /* какой слот настраиваем: 'primary' или 'fallback' */
 
-  /* Переключение слота в шторке звука */
-  function setSoundMode(mode) {
-    soundMode = mode === 'fallback' ? 'fallback' : 'primary';
-    if (soundTarget) {
-      var segs = soundTarget.querySelectorAll('.seg');
-      for (var i = 0; i < segs.length; i++) {
-        segs[i].classList.toggle('on', segs[i].getAttribute('data-sound-mode') === soundMode);
-      }
+  /* Что настраиваем в шторке звука: 'primary', 'fallback' или 'alarm' */
+  function setSoundTarget(target) {
+    picking = (target === 'alarm' || target === 'fallback') ? target : 'primary';
+    var title = 'Звук будильника';
+    var hint = 'Системные звуки будильника вашего устройства';
+    if (picking === 'primary') {
+      title = 'Основной звук';
+      hint = 'Звук для новых будильников. Его же включаем, если у будильника свой звук не задан.';
+    } else if (picking === 'fallback') {
+      title = 'Запасной звук';
+      hint = 'Включится, если основной звук недоступен: файл удалён или ссылка не открылась.';
     }
-    if (soundHint) {
-      soundHint.textContent = soundMode === 'fallback'
-        ? 'Запасной звук включится, если основной недоступен (например, нет сети).'
-        : 'Системные звуки будильника вашего устройства';
-    }
+    var titleEl = $('soundTitle');
+    if (titleEl) titleEl.textContent = title;
+    if (soundHint) soundHint.textContent = hint;
     buildSoundList();
-  }
-
-  if (soundTarget) {
-    soundTarget.addEventListener('click', function (event) {
-      var seg = event.target.closest ? event.target.closest('.seg') : null;
-      if (!seg) return;
-      setSoundMode(seg.getAttribute('data-sound-mode'));
-    });
   }
 
   /* Тактильный отклик нативного WebView-моста (короткая вибрация) */
@@ -847,6 +838,10 @@
       cards[tc].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     $('updateSwitch').setAttribute('aria-checked', state.updateCheck ? 'true' : 'false');
+    var pv = $('sPrimaryValue');
+    if (pv) pv.textContent = state.soundTitle || 'По умолчанию';
+    var fv = $('sFallbackValue');
+    if (fv) fv.textContent = state.fallbackSoundTitle || 'Не выбран';
   }
 
   /* ————— Связь с Android ————— */
@@ -963,13 +958,14 @@
       toast('Звук выбран: ' + title);
       return;
     }
-    if (soundMode === 'fallback') {
+    if (picking === 'fallback') {
       state.fallbackSoundTitle = title;
       state.fallbackSoundUri = uri;
     } else {
       state.soundTitle = title;
       state.soundUri = uri;
     }
+    saveState();
     loadSoundList();
     render();
     pushSettings();
@@ -1012,7 +1008,7 @@
       closeSheet(soundOverlay);
       return;
     }
-    if (soundMode === 'fallback') {
+    if (picking === 'fallback') {
       state.fallbackSoundTitle = title;
       state.fallbackSoundUri = uri || '';
     } else {
@@ -1094,11 +1090,7 @@
   /* ————— Шторки ————— */
   function openSheet(overlay) {
     if (overlay === soundOverlay) {
-      var forAlarm = !!(picking === 'alarm' && editAlarm);
-      if (soundTarget) soundTarget.hidden = forAlarm;
-      if (soundHint) soundHint.hidden = forAlarm;
-      /* Для отдельного будильника слот не переключаем — правим его звук */
-      setSoundMode(forAlarm ? 'primary' : soundMode);
+      setSoundTarget(picking === 'alarm' && editAlarm ? 'alarm' : picking);
     }
     if (overlay === moreOverlay) { renderSettings(); refreshHealth(); }
     overlay.classList.add('open');
@@ -1156,15 +1148,19 @@
     if (overlay === alarmOverlay) {
       editing = false;
       editAlarm = null;
-      picking = 'global';
+      picking = 'primary';
       setTimeout(function () { timeInput.blur(); labelInput.blur(); }, 250);
+    }
+    if (overlay === soundOverlay) {
+      picking = 'primary';
+      if (moreOverlay.classList.contains('open')) renderSettings();
     }
     if (overlay === moreOverlay && document.activeElement) document.activeElement.blur();
     return wasOpen;
   }
 
   function closeTopSheet() {
-    var order = [updateOverlay, permOverlay, moreOverlay, soundOverlay, alarmOverlay, disableOverlay];
+    var order = [updateOverlay, permOverlay, soundOverlay, moreOverlay, alarmOverlay, disableOverlay];
     for (var i = 0; i < order.length; i++) {
       if (order[i].classList.contains('open')) { closeSheet(order[i]); return true; }
     }
@@ -1184,7 +1180,7 @@
     row.type = 'button';
     var currentUri = (picking === 'alarm' && editAlarm)
       ? (editAlarm.soundUri || '')
-      : (soundMode === 'fallback' ? (state.fallbackSoundUri || '') : (state.soundUri || ''));
+      : (picking === 'fallback' ? (state.fallbackSoundUri || '') : (state.soundUri || ''));
     row.className = 'sound' + (sound.uri === currentUri ? ' selected' : '');
     row.setAttribute('data-uri', sound.uri || '');
     row.setAttribute('data-title', sound.title || 'По умолчанию');
@@ -1383,6 +1379,18 @@
   /* ————— Персональные настройки в редакторе ————— */
   $('eSoundRow').addEventListener('click', function () {
     picking = 'alarm';
+    openSheet(soundOverlay);
+  });
+
+  /* Общие звуки из настроек: основной (по умолчанию) и запасной */
+  var sPrimaryRow = $('sPrimaryRow');
+  if (sPrimaryRow) sPrimaryRow.addEventListener('click', function () {
+    picking = 'primary';
+    openSheet(soundOverlay);
+  });
+  var sFallbackRow = $('sFallbackRow');
+  if (sFallbackRow) sFallbackRow.addEventListener('click', function () {
+    picking = 'fallback';
     openSheet(soundOverlay);
   });
 
