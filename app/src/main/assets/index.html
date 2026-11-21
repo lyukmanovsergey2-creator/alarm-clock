@@ -525,6 +525,38 @@
     flex: 0 0 auto;
   }
 
+  .sound-target {
+    display: flex;
+    gap: 4px;
+    flex: 0 0 auto;
+    margin: 0 0 10px;
+    padding: 4px;
+    border-radius: var(--r-field);
+    background: var(--btn-bg);
+  }
+
+  .sound-target[hidden] { display: none; }
+
+  .sound-target .seg {
+    flex: 1;
+    min-height: 36px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: calc(var(--r-field) - 2px);
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color .18s, color .18s;
+  }
+
+  .sound-target .seg.on {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
   .sound-list {
     min-height: 0;
     overflow-y: auto;
@@ -1692,17 +1724,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <p class="hint">Системные звуки будильника вашего устройства</p>
-    <div style="margin: 8px 0; display: flex; gap: 16px; align-items: center;">
-      <label style="font-size: 12px; color: var(--muted);">
-        <input type="radio" name="soundMode" value="primary" checked>
-        Основной
-      </label>
-      <label style="font-size: 12px; color: var(--muted);">
-        <input type="radio" name="soundMode" value="fallback">
-        Запасной
-      </label>
+    <div class="sound-target" id="soundTarget" role="group" aria-label="Какой звук настраиваем">
+      <button class="seg on" type="button" data-sound-mode="primary">Основной</button>
+      <button class="seg" type="button" data-sound-mode="fallback">Запасной</button>
     </div>
+    <p class="hint" id="soundHint">Системные звуки будильника вашего устройства</p>
     <div class="sound-list" id="soundList"></div>
     <button class="btn-sm add-file" id="addFileBtn" type="button">+ Выбрать свой файл…</button>
     <div class="sheet-actions">

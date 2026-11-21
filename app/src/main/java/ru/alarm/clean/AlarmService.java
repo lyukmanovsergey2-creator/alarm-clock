@@ -250,12 +250,31 @@ public class AlarmService extends Service {
             return;
         }
 
+        /* Запасной звук из настроек: срабатывает, если основной недоступен
+           (нет сети, файл удалён, битая ссылка). */
+        Uri userFallback = userFallbackUri(soundUri);
+        if (userFallback != null && playUri(userFallback)) {
+            return;
+        }
+
         Uri fallback = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
         if (fallback == null) {
             fallback = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
         }
         if (fallback != null && !fallback.equals(uri)) {
             playUri(fallback);
+        }
+    }
+
+    private Uri userFallbackUri(String primary) {
+        try {
+            String raw = AlarmScheduler.prefs(this).getString("fallbackSoundUri", "");
+            if (raw == null || raw.isEmpty() || raw.equals(primary)) {
+                return null;
+            }
+            return Uri.parse(raw);
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

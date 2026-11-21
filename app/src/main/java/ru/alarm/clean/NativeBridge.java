@@ -265,6 +265,10 @@ public class NativeBridge {
 
     private void writeSettings(JSONObject c, SharedPreferences.Editor editor) {
         if (c.has("soundUri")) editor.putString("soundUri", c.optString("soundUri", ""));
+        if (c.has("fallbackSoundUri"))
+            editor.putString("fallbackSoundUri", c.optString("fallbackSoundUri", ""));
+        if (c.has("fallbackSoundTitle"))
+            editor.putString("fallbackSoundTitle", c.optString("fallbackSoundTitle", ""));
         if (c.has("label")) editor.putString("label", c.optString("label", ""));
         if (c.has("snoozeMinutes"))
             editor.putInt("snoozeMinutes", clampInt(c.optInt("snoozeMinutes", 10), 1, 120));

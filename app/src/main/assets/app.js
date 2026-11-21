@@ -24,9 +24,9 @@
     theme: 0,        /* 0 — «Пульт», 1 — «Бумага», 2 — «Сад» */
     light: false,    /* исполнение внутри выбранной темы */
     updateCheck: false,
-    alarms: []   /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
-    fallbackSoundUri: "",
-    fallbackSoundTitle: ""
+    alarms: [],  /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
+    fallbackSoundUri: '',
+    fallbackSoundTitle: ''
   };
 
   var $ = function (id) { return document.getElementById(id); };
@@ -50,12 +50,8 @@
 
   var soundOverlay = $('soundOverlay');
   var soundList = $('soundList');
-  /* Синхронизация режима звука */
-  document.querySelectorAll("input[name=\"soundMode\"]").forEach(function(radio) {
-    radio.addEventListener("change", function() {
-      soundMode = this.value;
-    });
-  });
+  var soundTarget = $('soundTarget');
+  var soundHint = $('soundHint');
   var moreOverlay = $('moreOverlay');
   var disableOverlay = $('disableOverlay');
   var alarmOverlay = $('alarmOverlay');
@@ -77,7 +73,32 @@
   var swiping = false;  /* активный жест свайпа — рендер списка отложен */
 
   var bridge = window.NativeAlarm || null;
-  var soundMode = 'primary'; /* 'primary' или 'fallback' */
+  var soundMode = 'primary'; /* какой слот настраиваем: 'primary' или 'fallback' */
+
+  /* Переключение слота в шторке звука */
+  function setSoundMode(mode) {
+    soundMode = mode === 'fallback' ? 'fallback' : 'primary';
+    if (soundTarget) {
+      var segs = soundTarget.querySelectorAll('.seg');
+      for (var i = 0; i < segs.length; i++) {
+        segs[i].classList.toggle('on', segs[i].getAttribute('data-sound-mode') === soundMode);
+      }
+    }
+    if (soundHint) {
+      soundHint.textContent = soundMode === 'fallback'
+        ? 'Запасной звук включится, если основной недоступен (например, нет сети).'
+        : 'Системные звуки будильника вашего устройства';
+    }
+    buildSoundList();
+  }
+
+  if (soundTarget) {
+    soundTarget.addEventListener('click', function (event) {
+      var seg = event.target.closest ? event.target.closest('.seg') : null;
+      if (!seg) return;
+      setSoundMode(seg.getAttribute('data-sound-mode'));
+    });
+  }
 
   /* Тактильный отклик нативного WebView-моста (короткая вибрация) */
   function haptic(ms) {
@@ -158,6 +179,8 @@
         result.light = num(s.theme, 0) === 1;
       }
       result.updateCheck = !!s.updateCheck;
+      result.fallbackSoundUri = typeof s.fallbackSoundUri === 'string' ? s.fallbackSoundUri : '';
+      result.fallbackSoundTitle = typeof s.fallbackSoundTitle === 'string' ? s.fallbackSoundTitle : '';
       if (Array.isArray(s.alarms)) {
         for (var a = 0; a < s.alarms.length && result.alarms.length < MAX_ALARMS; a++) {
           var al = normalizeAlarm(s.alarms[a]);
@@ -831,6 +854,8 @@
     return {
       alarms: state.alarms,
       soundUri: state.soundUri || '',
+      fallbackSoundUri: state.fallbackSoundUri || '',
+      fallbackSoundTitle: state.fallbackSoundTitle || '',
       snoozeMinutes: state.snoozeMinutes,
       maxSnoozes: state.maxSnoozes,
       fadeSeconds: state.fadeSeconds,
@@ -965,6 +990,7 @@
       updateEditorSound();
     }
     if (state.soundUri === uri) { state.soundUri = ''; state.soundTitle = 'По умолчанию'; }
+    if (state.fallbackSoundUri === uri) { state.fallbackSoundUri = ''; state.fallbackSoundTitle = ''; }
     saveState();
     loadSoundList();
     if (picking === 'alarm' && editAlarm) {
@@ -1067,7 +1093,13 @@
 
   /* ————— Шторки ————— */
   function openSheet(overlay) {
-    if (overlay === soundOverlay) buildSoundList();
+    if (overlay === soundOverlay) {
+      var forAlarm = !!(picking === 'alarm' && editAlarm);
+      if (soundTarget) soundTarget.hidden = forAlarm;
+      if (soundHint) soundHint.hidden = forAlarm;
+      /* Для отдельного будильника слот не переключаем — правим его звук */
+      setSoundMode(forAlarm ? 'primary' : soundMode);
+    }
     if (overlay === moreOverlay) { renderSettings(); refreshHealth(); }
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
@@ -1150,7 +1182,9 @@
   function buildSoundRow(sound) {
     var row = document.createElement('button');
     row.type = 'button';
-    var currentUri = (picking === 'alarm' && editAlarm) ? (editAlarm.soundUri || '') : (state.soundUri || '');
+    var currentUri = (picking === 'alarm' && editAlarm)
+      ? (editAlarm.soundUri || '')
+      : (soundMode === 'fallback' ? (state.fallbackSoundUri || '') : (state.soundUri || ''));
     row.className = 'sound' + (sound.uri === currentUri ? ' selected' : '');
     row.setAttribute('data-uri', sound.uri || '');
     row.setAttribute('data-title', sound.title || 'По умолчанию');
