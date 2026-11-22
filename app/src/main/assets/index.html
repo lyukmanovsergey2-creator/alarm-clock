@@ -1111,6 +1111,45 @@
     margin-top: 10px;
     flex: 0 0 auto;
   }
+
+  .radio-form {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+  }
+
+  .radio-form .text-input { flex: 1; min-width: 0; }
+
+  .radio-form .btn-sm {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 16px;
+  }
+
+  .radio-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .radio-name {
+    font-size: 14.5px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .radio-meta {
+    font-size: 11.5px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .sound .del {
     width: 30px; height: 30px; flex: 0 0 auto; border-radius: 50%;
     display: grid; place-items: center; color: var(--dim); font-size: 18px; line-height: 1;
@@ -1797,8 +1836,31 @@
     <p class="hint" id="soundHint">Системные звуки будильника вашего устройства</p>
     <div class="sound-list" id="soundList"></div>
     <button class="btn-sm add-file" id="addFileBtn" type="button">+ Выбрать свой файл…</button>
+    <button class="btn-sm add-file" id="radioBtn" type="button">📻 Интернет-радио…</button>
     <div class="sheet-actions">
       <button class="btn btn-primary" type="button" data-close="sound">Готово</button>
+    </div>
+  </div>
+</div>
+
+<!-- Интернет-радио -->
+<div class="overlay" id="radioOverlay" aria-hidden="true">
+  <div class="sheet tall" role="dialog" aria-modal="true" aria-labelledby="radioTitle">
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <h2 id="radioTitle">Интернет-радио</h2>
+      <button class="close" type="button" data-close="radio" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="hint" id="radioHint">Нужна сеть: поток расходует трафик. За 12 секунд до звонка станция готовится тихо; пока она грузится, звучит запасной звук.</p>
+    <div class="radio-form">
+      <input class="text-input" id="radioUrl" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://поток…">
+      <button class="btn-sm accent" id="radioAdd" type="button">Добавить</button>
+    </div>
+    <div class="sound-list" id="radioList"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" type="button" data-close="radio">Готово</button>
     </div>
   </div>
 </div>

@@ -26,8 +26,21 @@
     updateCheck: false,
     alarms: [],  /* [{id, enabled, hour, minute, repeat, days, label, skipBefore}] */
     fallbackSoundUri: '',
-    fallbackSoundTitle: ''
+    fallbackSoundTitle: '',
+    radioStations: []   /* [{title, url}] — свои и недавние станции */
   };
+
+  /* Проверенные станции: играют через MediaPlayer как обычный поток. */
+  var RADIO_PRESETS = [
+    { title: 'Европа Плюс', url: 'https://ep128.hostingradio.ru:8030/ep128', genre: 'Поп-хиты' },
+    { title: 'Ретро FM', url: 'https://retroserver.streamr.ru:8043/retro256.mp3', genre: 'Ретро' },
+    { title: 'DFM', url: 'https://dfm.hostingradio.ru/dfm96.aacp', genre: 'Танцевальная' },
+    { title: 'Радио Максимум', url: 'https://maximum.hostingradio.ru/maximum96.aacp', genre: 'Рок и поп' },
+    { title: 'Наше Радио', url: 'https://nashe1.hostingradio.ru/nashe-128.mp3', genre: 'Рок' },
+    { title: 'Радио Рекорд', url: 'https://radiorecord.hostingradio.ru/rr_main96.aacp', genre: 'Танцы' },
+    { title: 'Маяк', url: 'https://icecast-vgtrk.cdnvideo.ru/mayakfm', genre: 'Разговорное' },
+    { title: 'Монте-Карло', url: 'https://mc-mcgold.hostingradio.ru/mcgold96.aacp', genre: 'Лаунж' }
+  ];
 
   var $ = function (id) { return document.getElementById(id); };
   var app = $('app');
@@ -51,6 +64,8 @@
   var soundOverlay = $('soundOverlay');
   var soundList = $('soundList');
   var soundHint = $('soundHint');
+  var radioOverlay = $('radioOverlay');
+  var radioList = $('radioList');
   var moreOverlay = $('moreOverlay');
   var disableOverlay = $('disableOverlay');
   var alarmOverlay = $('alarmOverlay');
@@ -129,6 +144,7 @@
       }
     }
     result.customSounds = [];
+    result.radioStations = [];
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
@@ -172,6 +188,19 @@
       result.updateCheck = !!s.updateCheck;
       result.fallbackSoundUri = typeof s.fallbackSoundUri === 'string' ? s.fallbackSoundUri : '';
       result.fallbackSoundTitle = typeof s.fallbackSoundTitle === 'string' ? s.fallbackSoundTitle : '';
+      if (Array.isArray(s.radioStations)) {
+        for (var rs = 0; rs < s.radioStations.length && result.radioStations.length < 12; rs++) {
+          var station = s.radioStations[rs];
+          if (station && typeof station.url === 'string'
+              && /^https?:\/\//i.test(station.url) && station.url.length <= 500) {
+            result.radioStations.push({
+              title: typeof station.title === 'string' && station.title
+                ? station.title : hostOf(station.url),
+              url: station.url
+            });
+          }
+        }
+      }
       if (Array.isArray(s.alarms)) {
         for (var a = 0; a < s.alarms.length && result.alarms.length < MAX_ALARMS; a++) {
           var al = normalizeAlarm(s.alarms[a]);
@@ -616,6 +645,7 @@
 
   function anySheetOpen() {
     return moreOverlay.classList.contains('open') || soundOverlay.classList.contains('open')
+      || radioOverlay.classList.contains('open')
       || alarmOverlay.classList.contains('open') || disableOverlay.classList.contains('open')
       || permOverlay.classList.contains('open') || updateOverlay.classList.contains('open');
   }
@@ -932,6 +962,9 @@
     for (var c = 0; c < state.customSounds.length; c++) {
       sounds.push({ title: state.customSounds[c].title, uri: state.customSounds[c].uri, custom: true });
     }
+    for (var r = 0; r < state.radioStations.length; r++) {
+      sounds.push({ title: state.radioStations[r].title, uri: state.radioStations[r].url, radio: true });
+    }
     if (state.soundUri) {
       for (var i2 = 0; i2 < sounds.length; i2++) {
         if (sounds[i2].uri === state.soundUri) { state.soundTitle = sounds[i2].title; break; }
@@ -996,6 +1029,193 @@
       pushSettings();
       buildSoundList();
     }
+  }
+
+  /* ————— Интернет-радио ————— */
+
+  function hostOf(url) {
+    var s = String(url || '').replace(/^https?:\/\//i, '');
+    var slash = s.indexOf('/');
+    if (slash >= 0) s = s.slice(0, slash);
+    return s || 'Радиостанция';
+  }
+
+  function allRadioStations() {
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < RADIO_PRESETS.length; i++) {
+      out.push(RADIO_PRESETS[i]);
+      seen[RADIO_PRESETS[i].url] = true;
+    }
+    for (var j = 0; j < state.radioStations.length; j++) {
+      var st = state.radioStations[j];
+      if (seen[st.url]) continue;
+      seen[st.url] = true;
+      out.push({ title: st.title, url: st.url, genre: 'Своя станция', custom: true });
+    }
+    return out;
+  }
+
+  function rememberStation(title, url) {
+    var list = [{ title: title, url: url }];
+    for (var i = 0; i < state.radioStations.length; i++) {
+      if (state.radioStations[i].url !== url) list.push(state.radioStations[i]);
+    }
+    state.radioStations = list.slice(0, 12);
+    saveState();
+  }
+
+  function removeRadioStation(url) {
+    var list = [];
+    for (var i = 0; i < state.radioStations.length; i++) {
+      if (state.radioStations[i].url !== url) list.push(state.radioStations[i]);
+    }
+    state.radioStations = list;
+    if (picking === 'alarm' && editAlarm && editAlarm.soundUri === url) {
+      editAlarm.soundUri = '';
+      editAlarm.soundTitle = 'По умолчанию';
+      updateEditorSound();
+    }
+    if (state.soundUri === url) { state.soundUri = ''; state.soundTitle = 'По умолчанию'; }
+    if (state.fallbackSoundUri === url) { state.fallbackSoundUri = ''; state.fallbackSoundTitle = ''; }
+    saveState();
+    loadSoundList();
+    render();
+    pushSettings();
+    buildSoundList();
+    buildRadioList();
+  }
+
+  function buildRadioList() {
+    if (!radioList) return;
+    radioList.innerHTML = '';
+    var stations = allRadioStations();
+    var current = (picking === 'alarm' && editAlarm)
+      ? (editAlarm.soundUri || '')
+      : (picking === 'fallback' ? (state.fallbackSoundUri || '') : (state.soundUri || ''));
+
+    for (var i = 0; i < stations.length; i++) {
+      radioList.appendChild(buildRadioRow(stations[i], stations[i].url === current));
+    }
+  }
+
+  function buildRadioRow(station, selected) {
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'sound' + (selected ? ' selected' : '');
+    row.setAttribute('data-url', station.url);
+
+    var main = document.createElement('span');
+    main.className = 'radio-main';
+    var name = document.createElement('span');
+    name.className = 'radio-name';
+    name.textContent = station.title;
+    var meta = document.createElement('span');
+    meta.className = 'radio-meta';
+    meta.textContent = station.genre || hostOf(station.url);
+    main.appendChild(name);
+    main.appendChild(meta);
+    row.appendChild(main);
+
+    var del = null;
+    if (station.custom) {
+      del = document.createElement('span');
+      del.className = 'del';
+      del.setAttribute('role', 'button');
+      del.setAttribute('aria-label', 'Убрать станцию');
+      del.textContent = '×';
+      row.appendChild(del);
+    }
+
+    var play = document.createElement('span');
+    play.className = 'play';
+    play.setAttribute('role', 'button');
+    play.setAttribute('aria-label', 'Прослушать');
+    play.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10-6.5a1 1 0 0 0 0-1.72l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>';
+    row.appendChild(play);
+
+    var radio = document.createElement('span');
+    radio.className = 'radio';
+    row.appendChild(radio);
+
+    row.addEventListener('click', function (event) {
+      if (del && event.target === del) {
+        removeRadioStation(station.url);
+        return;
+      }
+      if (event.target === play || play.contains(event.target)) {
+        playPreview(station.url);
+        return;
+      }
+      chooseRadio(station.title, station.url);
+    });
+
+    return row;
+  }
+
+  function chooseRadio(title, url) {
+    rememberStation(title, url);
+
+    if (picking === 'alarm' && editAlarm) {
+      editAlarm.soundUri = url;
+      editAlarm.soundTitle = title;
+      saveState();
+      loadSoundList();
+      render();
+      pushSettings();
+      buildSoundList();
+      updateEditorSound();
+      closeSheet(radioOverlay);
+      if (soundOverlay.classList.contains('open')) closeSheet(soundOverlay);
+      toast('Радио: ' + title);
+      return;
+    }
+
+    if (picking === 'fallback') {
+      state.fallbackSoundUri = url;
+      state.fallbackSoundTitle = title;
+    } else {
+      state.soundUri = url;
+      state.soundTitle = title;
+    }
+    saveState();
+    loadSoundList();
+    render();
+    pushSettings();
+    buildSoundList();
+    buildRadioList();
+    if (moreOverlay.classList.contains('open')) renderSettings();
+    closeSheet(radioOverlay);
+    toast('Радио: ' + title);
+  }
+
+  function addCustomRadio() {
+    var input = $('radioUrl');
+    var url = input && input.value ? input.value.trim() : '';
+    if (!/^https?:\/\/\S+$/i.test(url)) {
+      toast('Нужна ссылка http:// или https://');
+      return;
+    }
+    if (url.length > 500) {
+      toast('Слишком длинная ссылка');
+      return;
+    }
+    var title = hostOf(url);
+    rememberStation(title, url);
+    if (input) input.value = '';
+    buildRadioList();
+    chooseRadio(title, url);
+  }
+
+  function openRadioSheet() {
+    var hint = $('radioHint');
+    if (hint) {
+      hint.textContent = picking === 'fallback'
+        ? 'Запасной звук включается мгновенно: сначала прозвучит системная мелодия, а радио подключится, когда загрузится.'
+        : 'Нужна сеть: поток расходует трафик. За 12 секунд до звонка станция готовится тихо; пока она грузится, звучит запасной звук.';
+    }
+    buildRadioList();
+    openSheet(radioOverlay);
   }
 
   function selectSound(title, uri) {
@@ -1160,7 +1380,7 @@
   }
 
   function closeTopSheet() {
-    var order = [updateOverlay, permOverlay, soundOverlay, moreOverlay, alarmOverlay, disableOverlay];
+    var order = [updateOverlay, permOverlay, radioOverlay, soundOverlay, moreOverlay, alarmOverlay, disableOverlay];
     for (var i = 0; i < order.length; i++) {
       if (order[i].classList.contains('open')) { closeSheet(order[i]); return true; }
     }
@@ -1187,11 +1407,12 @@
 
     var title = document.createElement('span');
     title.className = 'sound-title';
-    title.textContent = (sound.custom ? '♪ ' : '') + (sound.title || 'По умолчанию');
+    title.textContent = (sound.radio ? '📻 ' : sound.custom ? '♪ ' : '')
+      + (sound.title || 'По умолчанию');
     row.appendChild(title);
 
     var del = null;
-    if (sound.custom) {
+    if (sound.custom || sound.radio) {
       del = document.createElement('span');
       del.className = 'del';
       del.setAttribute('role', 'button');
@@ -1214,7 +1435,11 @@
     row.addEventListener('click', function (event) {
       var uri = row.getAttribute('data-uri') || '';
       var titleText = row.getAttribute('data-title') || 'По умолчанию';
-      if (del && (event.target === del)) { removeCustomSound(uri); return; }
+      if (del && (event.target === del)) {
+        if (sound.radio) removeRadioStation(uri);
+        else removeCustomSound(uri);
+        return;
+      }
       if (event.target === play || play.contains(event.target)) { playPreview(uri); return; }
       var nodes = soundList.querySelectorAll('.sound');
       for (var j = 0; j < nodes.length; j++) nodes[j].classList.remove('selected');
@@ -1392,6 +1617,18 @@
   if (sFallbackRow) sFallbackRow.addEventListener('click', function () {
     picking = 'fallback';
     openSheet(soundOverlay);
+  });
+
+  var radioBtn = $('radioBtn');
+  if (radioBtn) radioBtn.addEventListener('click', openRadioSheet);
+  var radioAddBtn = $('radioAdd');
+  if (radioAddBtn) radioAddBtn.addEventListener('click', addCustomRadio);
+  var radioUrlInput = $('radioUrl');
+  if (radioUrlInput) radioUrlInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addCustomRadio();
+    }
   });
 
   $('eVolumeRange').addEventListener('input', function () {
@@ -1716,11 +1953,12 @@
         : target === 'alarm' ? alarmOverlay
         : target === 'perm' ? permOverlay
         : target === 'update' ? updateOverlay
+        : target === 'radio' ? radioOverlay
         : soundOverlay);
     });
   }
 
-  [soundOverlay, moreOverlay, alarmOverlay, disableOverlay, permOverlay, updateOverlay].forEach(function (overlay) {
+  [radioOverlay, soundOverlay, moreOverlay, alarmOverlay, disableOverlay, permOverlay, updateOverlay].forEach(function (overlay) {
     overlay.addEventListener('click', function (event) {
       if (event.target === overlay) closeSheet(overlay);
     });

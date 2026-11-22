@@ -31,6 +31,8 @@ public class NativeBridge {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private MediaPlayer previewPlayer;
     private Runnable previewStop;
+    private MediaPlayer previewPreparing;
+    private Runnable previewPrepareTimeout;
 
     NativeBridge(Activity activity, Object webView) {
         this.activity = activity;
@@ -371,6 +373,11 @@ public class NativeBridge {
     private void startPreview(String soundUri) {
         stopPreviewInternal();
 
+        if (RadioPrewarm.isStream(soundUri)) {
+            startPreviewStream(soundUri);
+            return;
+        }
+
         Uri uri = resolveSound(soundUri);
         if (uri == null) {
             return;
@@ -406,6 +413,80 @@ public class NativeBridge {
         }
     }
 
+    /** Превью интернет-радио: ждём буферизацию, но не дольше 8 секунд. */
+    private void startPreviewStream(final String url) {
+        try {
+            final MediaPlayer player = new MediaPlayer();
+            player.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build());
+            player.setDataSource(url);
+            previewPreparing = player;
+            player.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer prepared) {
+                    if (prepared != previewPreparing) {
+                        RadioPrewarm.releaseQuiet(prepared);
+                        return;
+                    }
+                    previewPreparing = null;
+                    cancelPreviewPrepareTimeout();
+                    try {
+                        prepared.start();
+                    } catch (Exception exception) {
+                        RadioPrewarm.releaseQuiet(prepared);
+                        toast("Станция не ответила");
+                        return;
+                    }
+                    previewPlayer = prepared;
+                    previewStop = new Runnable() {
+                        @Override
+                        public void run() {
+                            stopPreview();
+                        }
+                    };
+                    mainHandler.postDelayed(previewStop, 12000L);
+                }
+            });
+            player.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                @Override
+                public boolean onError(MediaPlayer failed, int what, int extra) {
+                    if (failed == previewPreparing) {
+                        previewPreparing = null;
+                    }
+                    cancelPreviewPrepareTimeout();
+                    RadioPrewarm.releaseQuiet(failed);
+                    toast("Станция не ответила");
+                    return true;
+                }
+            });
+            previewPrepareTimeout = new Runnable() {
+                @Override
+                public void run() {
+                    if (previewPreparing != null) {
+                        RadioPrewarm.releaseQuiet(previewPreparing);
+                        previewPreparing = null;
+                    }
+                    toast("Станция не ответила");
+                }
+            };
+            mainHandler.postDelayed(previewPrepareTimeout, 8000L);
+            player.prepareAsync();
+        } catch (Exception exception) {
+            cancelPreviewPrepareTimeout();
+            previewPreparing = null;
+            toast("Не удалось открыть станцию");
+        }
+    }
+
+    private void cancelPreviewPrepareTimeout() {
+        if (previewPrepareTimeout != null) {
+            mainHandler.removeCallbacks(previewPrepareTimeout);
+            previewPrepareTimeout = null;
+        }
+    }
+
     @JavascriptInterface
     public void stopPreview() {
         mainHandler.post(new Runnable() {
@@ -420,6 +501,11 @@ public class NativeBridge {
         if (previewStop != null) {
             mainHandler.removeCallbacks(previewStop);
             previewStop = null;
+        }
+        cancelPreviewPrepareTimeout();
+        if (previewPreparing != null) {
+            RadioPrewarm.releaseQuiet(previewPreparing);
+            previewPreparing = null;
         }
         if (previewPlayer != null) {
             try {

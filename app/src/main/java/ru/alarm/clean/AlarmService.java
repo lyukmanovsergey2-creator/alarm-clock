@@ -48,6 +48,12 @@ public class AlarmService extends Service {
     private int fadeStep = 0;
 
     private MediaPlayer player;
+    /* Поток радио: сначала prepareAsync, потом подмена запасного звука. */
+    private MediaPlayer streamPlayer;
+    private String streamUrl;
+    private Runnable streamTimeout;
+    private int fadeSteps;
+    private static final long STREAM_TIMEOUT_MS = 8000L;
     private PowerManager.WakeLock partialWakeLock;
     private PowerManager.WakeLock screenWakeLock;
     private Vibrator vibrator;
@@ -105,12 +111,14 @@ public class AlarmService extends Service {
                 int minutes = Math.max(1, Math.min(120,
                         AlarmScheduler.alarmSnoozeMinutes(prefs, id)));
                 long snoozeAt = System.currentTimeMillis() + minutes * 60000L;
-                AlarmScheduler.scheduleSnooze(this, id, snoozeAt);
+                /* Сначала фиксируем звук сноуза, затем ставим каналы и подготовку
+                   радио: подготовка читает snoozeSound. */
                 prefs.edit()
                         .putInt(AlarmScheduler.key(id, "snoozeCount"), count + 1)
                         .putString(AlarmScheduler.key(id, "snoozeSound"),
                                 AlarmScheduler.alarmSoundUri(prefs, id))
                         .apply();
+                AlarmScheduler.scheduleSnooze(this, id, snoozeAt);
             }
             stopRinging();
             stopSelf();
@@ -244,16 +252,57 @@ public class AlarmService extends Service {
 
     private void playSound(String soundUri) {
         releasePlayer();
+        releaseStreamRequest();
 
-        Uri uri = parseUri(soundUri);
-        if (playUri(uri)) {
+        String primary = soundUri == null ? "" : soundUri.trim();
+
+        /* Интернет-радио: если поток подготовлен заранее — играем сразу. */
+        if (RadioPrewarm.isStream(primary)) {
+            MediaPlayer ready = RadioPrewarm.take(primary);
+            if (ready != null) {
+                adoptStream(ready, primary);
+                return;
+            }
+            RadioPrewarm.release();
+            /* Пока грузится поток, будильник не молчит: запасной/системный звук. */
+            playFallbackNow(primary);
+            prepareStream(primary);
             return;
         }
 
+        Uri uri = parseUri(primary);
+        if (playUri(uri)) {
+            return;
+        }
+        playFallbackNow(primary);
+        recoverStreamFailure(primary);
+    }
+
+    /**
+     * Основной звук не загрузился. Если запасной звук — радио, сначала играет
+     * системная мелодия (мгновенно), а поток подключается, когда откроется.
+     */
+    private void recoverStreamFailure(String failedUrl) {
+        if (!running) {
+            return;
+        }
+        Uri userFallback = userFallbackUri(failedUrl);
+        String fallbackUrl = userFallback == null ? null : userFallback.toString();
+        if (!RadioPrewarm.isStream(fallbackUrl)) {
+            return;
+        }
+        AlarmScheduler.logLine(this, "radio: основной поток недоступен — готовлю запасную станцию");
+        prepareStream(fallbackUrl);
+    }
+
+    /** Немедленный звук на время загрузки потока и при его сбое. */
+    private void playFallbackNow(String primary) {
         /* Запасной звук из настроек: срабатывает, если основной недоступен
-           (нет сети, файл удалён, битая ссылка). */
-        Uri userFallback = userFallbackUri(soundUri);
-        if (userFallback != null && playUri(userFallback)) {
+           (нет сети, файл удалён, битая ссылка). Поток запасным быть не может:
+           его нельзя включить мгновенно. */
+        Uri userFallback = userFallbackUri(primary);
+        if (userFallback != null && !RadioPrewarm.isStream(userFallback.toString())
+                && playUri(userFallback)) {
             return;
         }
 
@@ -261,9 +310,189 @@ public class AlarmService extends Service {
         if (fallback == null) {
             fallback = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
         }
-        if (fallback != null && !fallback.equals(uri)) {
+        if (fallback != null) {
             playUri(fallback);
         }
+    }
+
+    /** Готовый плеер из prewarm: просто снимаем mute, запасной не нужен. */
+    private void adoptStream(MediaPlayer ready, String url) {
+        try {
+            ready.setOnErrorListener(streamLostListener());
+            ready.setOnCompletionListener(streamCompletionListener());
+            ready.setVolume(1f, 1f);
+            player = ready;
+            streamUrl = url;
+            if (!ready.isPlaying()) {
+                ready.start();
+            }
+            AlarmScheduler.logLine(this, "radio: поток был готов заранее — "
+                    + RadioPrewarm.host(url));
+        } catch (Exception exception) {
+            if (player == ready) {
+                player = null;
+            }
+            RadioPrewarm.releaseQuiet(ready);
+            playFallbackNow(url);
+        }
+    }
+
+    private void prepareStream(final String url) {
+        MediaPlayer created = null;
+        try {
+            final MediaPlayer mp = new MediaPlayer();
+            created = mp;
+            mp.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build());
+            mp.setDataSource(url);
+            mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer prepared) {
+                    if (prepared != streamPlayer) {
+                        RadioPrewarm.releaseQuiet(prepared);
+                        return;
+                    }
+                    streamPlayer = null;
+                    cancelStreamTimeout();
+                    switchToStream(prepared, url);
+                }
+            });
+            mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                @Override
+                public boolean onError(MediaPlayer failed, int what, int extra) {
+                    if (failed == streamPlayer) {
+                        streamPlayer = null;
+                    }
+                    cancelStreamTimeout();
+                    RadioPrewarm.releaseQuiet(failed);
+                    AlarmScheduler.logLine(AlarmService.this, "radio: станция не открылась ("
+                            + what + "/" + extra + ") — играет запасной");
+                    recoverStreamFailure(url);
+                    return true;
+                }
+            });
+            streamPlayer = mp;
+            streamUrl = url;
+            mp.prepareAsync();
+            streamTimeout = new Runnable() {
+                @Override
+                public void run() {
+                    if (streamPlayer != null) {
+                        RadioPrewarm.releaseQuiet(streamPlayer);
+                        streamPlayer = null;
+                    }
+                    AlarmScheduler.logLine(AlarmService.this,
+                            "radio: поток не ответил за 8 с — остаётся запасной");
+                    recoverStreamFailure(url);
+                }
+            };
+            handler.postDelayed(streamTimeout, STREAM_TIMEOUT_MS);
+            AlarmScheduler.logLine(this, "radio: готовлю поток " + RadioPrewarm.host(url));
+        } catch (Exception exception) {
+            if (created != null) {
+                if (created == streamPlayer) {
+                    streamPlayer = null;
+                }
+                RadioPrewarm.releaseQuiet(created);
+            }
+            AlarmScheduler.logLine(this, "radio: не удалось начать — "
+                    + exception.getClass().getSimpleName());
+        }
+    }
+
+    private void switchToStream(MediaPlayer mp, String url) {
+        if (!running) {
+            RadioPrewarm.releaseQuiet(mp);
+            return;
+        }
+        float volume = currentFadeVolume();
+        try {
+            mp.setOnErrorListener(streamLostListener());
+            mp.setOnCompletionListener(streamCompletionListener());
+            mp.setVolume(volume, volume);
+            mp.start();
+        } catch (Exception exception) {
+            RadioPrewarm.releaseQuiet(mp);
+            return;
+        }
+        /* Запасной больше не нужен. */
+        releasePlayer();
+        player = mp;
+        streamUrl = url;
+        AlarmScheduler.logLine(this, "radio: играю поток " + RadioPrewarm.host(url));
+    }
+
+    private MediaPlayer.OnErrorListener streamLostListener() {
+        return new MediaPlayer.OnErrorListener() {
+            @Override
+            public boolean onError(MediaPlayer failed, int what, int extra) {
+                if (failed != player) {
+                    /* Событие от уже заменённого плеера — текущий не трогаем. */
+                    RadioPrewarm.releaseQuiet(failed);
+                    return true;
+                }
+                onStreamLost("ошибка " + what + "/" + extra);
+                return true;
+            }
+        };
+    }
+
+    private MediaPlayer.OnCompletionListener streamCompletionListener() {
+        return new MediaPlayer.OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer completed) {
+                if (completed != player) {
+                    RadioPrewarm.releaseQuiet(completed);
+                    return;
+                }
+                onStreamLost("поток завершился");
+            }
+        };
+    }
+
+    /** Радио оборвалось уже во время звонка — возвращаемся к запасному. */
+    private void onStreamLost(String reason) {
+        String url = streamUrl;
+        streamUrl = null;
+        if (player != null) {
+            RadioPrewarm.releaseQuiet(player);
+            player = null;
+        }
+        AlarmScheduler.logLine(this, "radio: " + reason + " — включаю запасной");
+        playFallbackNow(url);
+        recoverStreamFailure(url);
+        if (player != null) {
+            float volume = currentFadeVolume();
+            try {
+                player.setVolume(volume, volume);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private float currentFadeVolume() {
+        if (fadeSteps <= 0) {
+            return 1f;
+        }
+        return Math.min(1f, 0.04f + 0.96f * fadeStep / (float) fadeSteps);
+    }
+
+    private void cancelStreamTimeout() {
+        if (streamTimeout != null) {
+            handler.removeCallbacks(streamTimeout);
+            streamTimeout = null;
+        }
+    }
+
+    private void releaseStreamRequest() {
+        cancelStreamTimeout();
+        if (streamPlayer != null) {
+            RadioPrewarm.releaseQuiet(streamPlayer);
+            streamPlayer = null;
+        }
+        streamUrl = null;
     }
 
     private Uri userFallbackUri(String primary) {
@@ -358,6 +587,7 @@ public class AlarmService extends Service {
     }
 
     private void startFadeIn(final int seconds) {
+        fadeSteps = seconds > 0 ? Math.max(1, seconds * 2) : 0;
         if (seconds <= 0 || player == null) {
             return;
         }
@@ -496,6 +726,8 @@ public class AlarmService extends Service {
     private void stopRinging() {
         handler.removeCallbacksAndMessages(null);
         releasePlayer();
+        releaseStreamRequest();
+        RadioPrewarm.release();
         restoreAlarmVolume();
 
         if (vibrator != null) {

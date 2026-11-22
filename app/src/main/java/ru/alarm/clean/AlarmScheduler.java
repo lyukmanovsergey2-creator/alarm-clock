@@ -24,6 +24,8 @@ final class AlarmScheduler {
     static final String PREFS = "alarm_prefs";
     static final String ACTION_ALARM = "ru.alarm.clean.ACTION_ALARM";
     static final String ACTION_SNOOZE = "ru.alarm.clean.ACTION_SNOOZE";
+    /** Тихое событие за 12 с до звонка: подготовить интернет-радио. */
+    static final String ACTION_PREPARE = "ru.alarm.clean.ACTION_PREPARE";
     /** Максимальное количество одновременных будильников. */
     static final int MAX_ALARMS = 15;
     /** EXTRA с номером будильника (id) для приёмника, сервиса и экрана звонка. */
@@ -36,6 +38,8 @@ final class AlarmScheduler {
        requestCode (чтобы PendingIntent-ы не затирали друг друга). */
     private static final int REQ_ALARM_BASE = 1000;   /* канал1: 1000 + id*2 */
     private static final int REQ_SNOOZE_BASE = 1200;  /* канал1: 1200 + id*2 */
+    private static final int REQ_PREPARE_BASE = 1400;        /* подготовка радио */
+    private static final int REQ_PREPARE_SNOOZE_BASE = 1600; /* подготовка к сноузу */
     /** Сколько времени после пропущенного срабатывания ещё звеним при разблокировке. */
     static final long MISSED_WINDOW_MS = 15 * 60 * 1000L;
 
@@ -284,6 +288,8 @@ final class AlarmScheduler {
         if (!prefs.getBoolean(key(id, "enabled"), false)) {
             cancelPending(context, REQ_ALARM_BASE + id * 2, ACTION_ALARM, id);
             cancelPending(context, REQ_ALARM_BASE + id * 2 + 1, ACTION_ALARM, id);
+            cancelPending(context, REQ_PREPARE_BASE + id * 2, ACTION_PREPARE, id);
+            cancelPending(context, REQ_PREPARE_SNOOZE_BASE + id * 2, ACTION_PREPARE, id);
             return 0L;
         }
         long now = System.currentTimeMillis();
@@ -299,8 +305,10 @@ final class AlarmScheduler {
         prefs.edit().putLong(key(id, "snoozeAt"), 0).apply();
         cancelPending(context, REQ_SNOOZE_BASE + id * 2, ACTION_SNOOZE, id);
         cancelPending(context, REQ_SNOOZE_BASE + id * 2 + 1, ACTION_SNOOZE, id);
+        cancelPending(context, REQ_PREPARE_SNOOZE_BASE + id * 2, ACTION_PREPARE, id);
         setAlarmDual(context, triggerAt, REQ_ALARM_BASE + id * 2, REQ_ALARM_BASE + id * 2 + 1,
                 ACTION_ALARM, id);
+        schedulePrewarm(context, REQ_PREPARE_BASE, id, triggerAt, alarmSoundUri(prefs, id));
         return triggerAt;
     }
 
@@ -324,6 +332,11 @@ final class AlarmScheduler {
         prefs.edit().putLong(key(id, "snoozeAt"), triggerAt).apply();
         setAlarmDual(context, triggerAt, REQ_SNOOZE_BASE + id * 2,
                 REQ_SNOOZE_BASE + id * 2 + 1, ACTION_SNOOZE, id);
+        String sound = prefs.getString(key(id, "snoozeSound"), "");
+        if (sound == null || sound.isEmpty()) {
+            sound = alarmSoundUri(prefs, id);
+        }
+        schedulePrewarm(context, REQ_PREPARE_SNOOZE_BASE, id, triggerAt, sound);
     }
 
     /** После срабатывания повторяющегося будильника — ставим следующий. */
@@ -336,6 +349,7 @@ final class AlarmScheduler {
                 .apply();
         setAlarmDual(context, triggerAt, REQ_ALARM_BASE + id * 2,
                 REQ_ALARM_BASE + id * 2 + 1, ACTION_ALARM, id);
+        schedulePrewarm(context, REQ_PREPARE_BASE, id, triggerAt, alarmSoundUri(prefs, id));
     }
 
     /** Снимает PendingIntent-ы конкретного будильника. */
@@ -344,6 +358,8 @@ final class AlarmScheduler {
         cancelPending(context, REQ_ALARM_BASE + id * 2 + 1, ACTION_ALARM, id);
         cancelPending(context, REQ_SNOOZE_BASE + id * 2, ACTION_SNOOZE, id);
         cancelPending(context, REQ_SNOOZE_BASE + id * 2 + 1, ACTION_SNOOZE, id);
+        cancelPending(context, REQ_PREPARE_BASE + id * 2, ACTION_PREPARE, id);
+        cancelPending(context, REQ_PREPARE_SNOOZE_BASE + id * 2, ACTION_PREPARE, id);
     }
 
     /** Полностью удаляет будильник: снимает каналы, чистит настройки, убирает из списка. */
@@ -388,6 +404,7 @@ final class AlarmScheduler {
     static void cancelPendingAlarmOnly(Context context, int id) {
         cancelPending(context, REQ_ALARM_BASE + id * 2, ACTION_ALARM, id);
         cancelPending(context, REQ_ALARM_BASE + id * 2 + 1, ACTION_ALARM, id);
+        cancelPending(context, REQ_PREPARE_BASE + id * 2, ACTION_PREPARE, id);
     }
 
     /** «На сутки» для повторяющегося будильника: пропустить ближайший звонок. */
@@ -436,12 +453,14 @@ final class AlarmScheduler {
                     prefs.edit().putLong(key(id, "triggerAt"), next).apply();
                     setAlarmDual(context, next, REQ_ALARM_BASE + id * 2,
                             REQ_ALARM_BASE + id * 2 + 1, ACTION_ALARM, id);
+                    schedulePrewarm(context, REQ_PREPARE_BASE, id, next, alarmSoundUri(prefs, id));
                     if (next > 0) {
                         summary.append(id).append("→").append((next - now) / 60000).append("м ");
                     }
                 } else if (triggerAt > now) {
                     setAlarmDual(context, triggerAt, REQ_ALARM_BASE + id * 2,
                             REQ_ALARM_BASE + id * 2 + 1, ACTION_ALARM, id);
+                    schedulePrewarm(context, REQ_PREPARE_BASE, id, triggerAt, alarmSoundUri(prefs, id));
                     summary.append(id).append("→").append((triggerAt - now) / 60000).append("м ");
                 } else if (triggerAt > 0 && now - triggerAt <= MISSED_WINDOW_MS) {
                     /* Время прошло совсем недавно (будильник не успел сработать
@@ -466,6 +485,11 @@ final class AlarmScheduler {
             if (snoozeAt > now) {
                 setAlarmDual(context, snoozeAt, REQ_SNOOZE_BASE + id * 2,
                         REQ_SNOOZE_BASE + id * 2 + 1, ACTION_SNOOZE, id);
+                String snoozeSound = prefs.getString(key(id, "snoozeSound"), "");
+                if (snoozeSound == null || snoozeSound.isEmpty()) {
+                    snoozeSound = alarmSoundUri(prefs, id);
+                }
+                schedulePrewarm(context, REQ_PREPARE_SNOOZE_BASE, id, snoozeAt, snoozeSound);
                 summary.append(id).append("→сноуз ");
             }
         }
@@ -529,6 +553,48 @@ final class AlarmScheduler {
         try {
             prefs(context).edit().putString("diag", "").apply();
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * Тихо готовит интернет-радио к звонку: за {@link RadioPrewarm#LEAD_MS} до
+     * срабатывания. Ставится только для потоков (http/https). Специально не
+     * использует setAlarmClock, чтобы не показывать второе время будильника
+     * на экране блокировки.
+     */
+    private static void schedulePrewarm(Context context, int base, int id,
+                                        long triggerAt, String soundUri) {
+        cancelPending(context, base + id * 2, ACTION_PREPARE, id);
+        if (!RadioPrewarm.isStream(soundUri) || triggerAt <= 0) {
+            return;
+        }
+        long at = triggerAt - RadioPrewarm.LEAD_MS;
+        long now = System.currentTimeMillis();
+        if (at <= now + 2000L) {
+            return;
+        }
+        setExactSilent(context, at, base + id * 2, ACTION_PREPARE, id);
+    }
+
+    private static void setExactSilent(Context context, long at, int requestCode,
+                                       String action, int id) {
+        AlarmManager manager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (manager == null) {
+            return;
+        }
+        PendingIntent operation = pending(context, requestCode, action, id);
+        try {
+            if (Build.VERSION.SDK_INT >= 31 && !manager.canScheduleExactAlarms()) {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation);
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= 23) {
+                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, operation);
+            } else {
+                manager.setExact(AlarmManager.RTC_WAKEUP, at, operation);
+            }
+        } catch (Exception exception) {
+            log(context, "prewarm " + id + ": " + exception.getClass().getSimpleName());
         }
     }
 

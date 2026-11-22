@@ -73,9 +73,49 @@ public class AlarmReceiver extends BroadcastReceiver {
             } catch (Exception exception) {
                 AlarmScheduler.logLine(context, "ALARM " + id + ": сервис НЕ запустился: " + exception);
             }
+        } else if (AlarmScheduler.ACTION_PREPARE.equals(action)) {
+            /* За 12 секунд до звонка: тихо готовим интернет-радио. */
+            int id = intent.getIntExtra(AlarmScheduler.EXTRA_ALARM_ID, 0);
+            long now = System.currentTimeMillis();
+            long window = RadioPrewarm.LEAD_MS + 5000L;
+            long main = prefs.getLong(AlarmScheduler.key(id, "triggerAt"), 0);
+            long snooze = prefs.getLong(AlarmScheduler.key(id, "snoozeAt"), 0);
+            boolean enabled = prefs.getBoolean(AlarmScheduler.key(id, "enabled"), false);
+
+            long target = 0;
+            if (snooze > now && snooze - now <= window) {
+                target = snooze;
+            } else if (enabled && main > now && main - now <= window) {
+                target = main;
+            }
+            if (target == 0) {
+                AlarmScheduler.logLine(context, "PREPARE " + id + ": уже неактуален — пропускаю");
+                return;
+            }
+            if (AlarmService.running) {
+                AlarmScheduler.logLine(context, "PREPARE " + id + ": уже звенит другой будильник");
+                return;
+            }
+            String sound = target == snooze
+                    ? prefs.getString(AlarmScheduler.key(id, "snoozeSound"), "")
+                    : "";
+            if (sound == null || sound.isEmpty()) {
+                sound = AlarmScheduler.alarmSoundUri(prefs, id);
+            }
+            if (!RadioPrewarm.isStream(sound)) {
+                return;
+            }
+            AlarmScheduler.logLine(context, "PREPARE " + id + ": готовлю радио за "
+                    + (target - now) / 1000 + " с");
+            RadioPrepService.start(context, sound);
         } else if (AlarmScheduler.ACTION_SNOOZE.equals(action)) {
             int id = intent.getIntExtra(AlarmScheduler.EXTRA_ALARM_ID, 0);
-            String sound = AlarmScheduler.alarmSoundUri(prefs, id);
+            /* Звук сноуза зафиксирован в момент «Отложить»; запасной вариант —
+               основной звук будильника (если запись не сохранилась). */
+            String sound = prefs.getString(AlarmScheduler.key(id, "snoozeSound"), "");
+            if (sound == null || sound.isEmpty()) {
+                sound = AlarmScheduler.alarmSoundUri(prefs, id);
+            }
             AlarmScheduler.logLine(context, "SNOOZE " + id + " сработал");
             prefs.edit().putLong(AlarmScheduler.key(id, "snoozeAt"), 0).apply();
             try {
